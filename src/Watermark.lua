@@ -13,7 +13,6 @@ return function(Orbit, opts)
     local gui = Orbit.Gui
 
     if not gui then
-        -- GUI yoksa bagimsiz bir ScreenGui olustur
         local HttpService = game:GetService("HttpService")
         gui = New("ScreenGui", {
             Name = "OrbitWatermark_" .. HttpService:GenerateGUID(false):sub(1, 8),
@@ -27,10 +26,11 @@ return function(Orbit, opts)
     local showPing = opts.ShowPing ~= false
     local showTime = opts.ShowTime ~= false
     local title = opts.Title or "Orbit UI"
-    local build = opts.Build or Orbit.Version or "v2.1"
+    local build = opts.Build or Orbit.Version or "v0.3.0"
     local customText = opts.CustomText
 
-    local pos = opts.Position or UDim2.new(0, 16, 0, 16)
+    -- Roblox topbar'i altinda guvenli konum (Y = 56)
+    local pos = opts.Position or UDim2.new(0, 16, 0, 56)
 
     local frame = New("Frame", {
         Name = "Watermark", Parent = gui, Position = pos,
@@ -45,7 +45,6 @@ return function(Orbit, opts)
         }),
     })
 
-    -- Canli durum noktasi (Accent yanip sonme efekti)
     local dot = New("Frame", {
         Parent = frame, Size = UDim2.fromOffset(8, 8),
         BackgroundColor3 = theme.Accent, BorderSizePixel = 0, ZIndex = 301,
@@ -70,10 +69,45 @@ return function(Orbit, opts)
     end
     function Watermark:Toggle() Watermark:SetVisible(not Watermark.Visible) end
 
-    -- FPS & Ping hesaplama
     local fps = 60
     local lastTime = tick()
     local frameCount = 0
+
+    local function updateStats()
+        local parts = {}
+        table.insert(parts, string.format("<b>%s</b> <font color='rgb(%d,%d,%d)'>%s</font>", title, math.floor(theme.SubText.R * 255), math.floor(theme.SubText.G * 255), math.floor(theme.SubText.B * 255), build))
+
+        if customText then
+            table.insert(parts, customText)
+        end
+        if showFps then
+            table.insert(parts, string.format("<font color='rgb(%d,%d,%d)'>%d FPS</font>", math.floor(theme.Accent.R * 255), math.floor(theme.Accent.G * 255), math.floor(theme.Accent.B * 255), fps))
+        end
+        if showPing then
+            local ping = 0
+            pcall(function()
+                local net = Stats:FindFirstChild("Network")
+                local sItem = net and net:FindFirstChild("ServerStatsItem")
+                local dPing = sItem and sItem:FindFirstChild("Data Ping")
+                if dPing then
+                    ping = math.floor(tonumber(dPing:GetValueString():match("%d+")) or 0)
+                else
+                    local p = Players.LocalPlayer
+                    if p and p.GetNetworkPing then ping = math.floor((p:GetNetworkPing() or 0) * 1000) end
+                end
+            end)
+            table.insert(parts, string.format("%dms", ping))
+        end
+        if showTime then
+            local ok, tStr = pcall(function() return os.date("%H:%M:%S") end)
+            if ok and tStr then table.insert(parts, tStr) end
+        end
+
+        label.Text = table.concat(parts, "  <font color='rgb(100,100,120)'>|</font>  ")
+    end
+
+    -- Hemen ilk guncellemeyi yap (metin bos kalmasin)
+    updateStats()
 
     local conn = RunService.RenderStepped:Connect(function()
         frameCount += 1
@@ -82,34 +116,7 @@ return function(Orbit, opts)
             fps = math.floor(frameCount / (now - lastTime))
             frameCount = 0
             lastTime = now
-
-            local parts = {}
-            table.insert(parts, string.format("<b>%s</b> <font color='rgb(%d,%d,%d)'>%s</font>", title, math.floor(theme.SubText.R * 255), math.floor(theme.SubText.G * 255), math.floor(theme.SubText.B * 255), build))
-
-            if customText then
-                table.insert(parts, customText)
-            end
-            if showFps then
-                table.insert(parts, string.format("<font color='rgb(%d,%d,%d)'>%d FPS</font>", math.floor(theme.Accent.R * 255), math.floor(theme.Accent.G * 255), math.floor(theme.Accent.B * 255), fps))
-            end
-            if showPing then
-                local ping = 0
-                pcall(function()
-                    local item = Stats.Network.ServerStatsItem:FindFirstChild("Data Ping")
-                    if item then
-                        ping = math.floor(tonumber(item:GetValueString():match("%d+")) or 0)
-                    else
-                        local p = Players.LocalPlayer
-                        if p then ping = math.floor((p:GetNetworkPing() or 0) * 1000) end
-                    end
-                end)
-                table.insert(parts, string.format("%dms", ping))
-            end
-            if showTime then
-                table.insert(parts, os.date("%H:%M:%S"))
-            end
-
-            label.Text = table.concat(parts, "  <font color='rgb(100,100,120)'>|</font>  ")
+            updateStats()
         end
     end)
 

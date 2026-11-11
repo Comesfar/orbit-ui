@@ -4,7 +4,6 @@ local Util = import("Util")
 local Icons = import("Icons")
 local New, Tween, Corner, Stroke, Pad = Util.New, Util.Tween, Util.Corner, Util.Stroke, Util.Pad
 
--- Eklemek icin: src/Elements/<Ad>.lua olustur ve buraya adi ekle
 local ELEMENTS = {
     "Section", "Divider", "Label", "Paragraph", "Image", "ProgressBar",
     "Button", "Toggle", "Slider", "RangeSlider", "Input", "TextArea", "Dropdown", "Keybind", "ColorPicker",
@@ -27,6 +26,14 @@ return function(Window, env, t)
     local page = New("ScrollingFrame", { Parent = content, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = theme.Stroke, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(), Visible = false }, {
         Pad(14, 14, 14, 14), New("UIListLayout", { Padding = UDim.new(0, 8) }),
     })
+
+    -- CanvasSize guvencesi: CanvasGroup icinde AutomaticCanvasSize calismazsa bile AbsoluteContentSize ile guncelle
+    local pageLayout = page:FindFirstChildOfClass("UIListLayout")
+    if pageLayout then
+        pageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            page.CanvasSize = UDim2.fromOffset(0, pageLayout.AbsoluteContentSize.Y + 28)
+        end)
+    end
 
     local function select()
         if state.current == Tab then return end
@@ -65,7 +72,6 @@ return function(Window, env, t)
         return row, label
     end
 
-    -- Arama disinda kalan (baslik/ayirici/resim) elemanlar icin isaretleyici
     function ctx.MarkStatic(inst)
         inst:SetAttribute("OrbitSearch", "")
         inst:SetAttribute("OrbitStatic", true)
@@ -88,7 +94,6 @@ return function(Window, env, t)
     for _, name in ipairs(ELEMENTS) do
         Tab[name] = function(_, o)
             local obj = import("Elements." .. name)(ctx, o)
-            -- o.Tooltip verilmisse son olusturulan satira ekle
             if type(o) == "table" and o.Tooltip then
                 for _, ch in ipairs(page:GetChildren()) do
                     if ch:IsA("GuiObject") and ch.LayoutOrder == order then

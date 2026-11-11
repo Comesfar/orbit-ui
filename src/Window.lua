@@ -124,6 +124,12 @@ return function(Orbit, opts)
     local sidebar = New("ScrollingFrame", { Name = "Sidebar", Parent = main, Position = UDim2.fromOffset(0, 44), Size = UDim2.new(0, 158, 1, -44), BackgroundColor3 = theme.Sidebar, BorderSizePixel = 0, ScrollBarThickness = 0, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, {
         Pad(10, 10, 10, 10), New("UIListLayout", { Padding = UDim.new(0, 4) }),
     })
+    local sidebarLayout = sidebar:FindFirstChildOfClass("UIListLayout")
+    if sidebarLayout then
+        sidebarLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            sidebar.CanvasSize = UDim2.fromOffset(0, sidebarLayout.AbsoluteContentSize.Y + 20)
+        end)
+    end
     local searchBox = New("TextBox", { Name = "Search", Parent = sidebar, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = theme.Element, ClearTextOnFocus = false, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = theme.Text, PlaceholderText = "Ara...", PlaceholderColor3 = theme.SubText, Text = "", TextXAlignment = Enum.TextXAlignment.Left }, { Corner(7), Stroke(theme.Stroke), Pad(10, 0, 8, 0) })
 
     local content = New("Frame", { Name = "Content", Parent = main, Position = UDim2.fromOffset(158, 44), Size = UDim2.new(1, -158, 1, -44), BackgroundTransparency = 1, ClipsDescendants = true })
@@ -317,7 +323,14 @@ return function(Orbit, opts)
     import("Config")(Window, opts.ConfigFolder or "OrbitUI")
 
     function Window:Tab(t)
-        local tab = import("Tab")(Window, env, t)
+        local ok, tab = pcall(function()
+            return import("Tab")(Window, env, t)
+        end)
+        if not ok then
+            warn("[Orbit] Tab olusturulamadi: " .. tostring(tab))
+            Orbit:Notify({ Title = "Tab Hatasi", Content = tostring(tab):sub(1, 100), Type = "Error" })
+            return nil
+        end
         table.insert(Window.Tabs, tab)
         return tab
     end

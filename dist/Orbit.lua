@@ -863,7 +863,7 @@ end
 
 end
 __modules["Icons"] = function(...)
--- Orbit UI :: Icons (Lucide, ilk kullanimda internetten yuklenir)
+-- Orbit UI :: Icons (Dahili temel ikonlar + arka planda dinamik yukleyici)
 local import = ...
 local Util = import("Util")
 
@@ -871,14 +871,59 @@ local Icons = {
     Url = "https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/lucide/dist/Icons.lua",
 }
 
-local set
-local function load()
-    if set then return set end
-    local ok, res = pcall(function()
-        return loadstring(game:HttpGet(Icons.Url))()
+-- Sik kullanilan temel Lucide ikonlari (Aga bagimli olmadan aninda yuklenir)
+local BUILTIN_ICONS = {
+    ["user"] = "rbxassetid://81589895647169",
+    ["house"] = "rbxassetid://98755624629571",
+    ["settings"] = "rbxassetid://80758916183665",
+    ["bell"] = "rbxassetid://97392696311902",
+    ["eye"] = "rbxassetid://100033680381365",
+    ["keyboard"] = "rbxassetid://121474456068237",
+    ["swords"] = "rbxassetid://81872698913435",
+    ["layout-dashboard"] = "rbxassetid://139929981863901",
+    ["info"] = "rbxassetid://124560466474914",
+    ["circle-check"] = "rbxassetid://85262178816537",
+    ["triangle-alert"] = "rbxassetid://125920361880643",
+    ["circle-alert"] = "rbxassetid://83898160590116",
+    ["key"] = "rbxassetid://96510194465420",
+    ["shield"] = "rbxassetid://110987169760162",
+    ["crosshair"] = "rbxassetid://134242818164054",
+    ["search"] = "rbxassetid://121018724060431",
+    ["check"] = "rbxassetid://93898873302694",
+    ["x"] = "rbxassetid://110786993356448",
+    ["chevron-down"] = "rbxassetid://134243273101015",
+    ["chevron-right"] = "rbxassetid://92473583511724",
+    ["folder"] = "rbxassetid://80846616596607",
+    ["trash"] = "rbxassetid://106723740584310",
+    ["save"] = "rbxassetid://126116963775616",
+    ["zap"] = "rbxassetid://130551565616516",
+    ["flame"] = "rbxassetid://98218034436456",
+    ["globe"] = "rbxassetid://114238209622913",
+    ["play"] = "rbxassetid://135609604299893",
+    ["pause"] = "rbxassetid://74873705394436",
+    ["sparkles"] = "rbxassetid://138635884129147",
+    ["refresh-cw"] = "rbxassetid://138133190015277",
+}
+
+local extraIcons = nil
+local loadingExtra = false
+
+local function loadExtraAsync()
+    if extraIcons or loadingExtra then return end
+    loadingExtra = true
+    task.spawn(function()
+        pcall(function()
+            local raw = game:HttpGet(Icons.Url)
+            local fn = loadstring(raw)
+            if fn then
+                local res = fn()
+                if type(res) == "table" then
+                    extraIcons = res
+                end
+            end
+        end)
+        loadingExtra = false
     end)
-    set = (ok and type(res) == "table") and res or {}
-    return set
 end
 
 -- "lucide:settings", "settings", "rbxassetid://123", 123 -> image id (yoksa nil)
@@ -887,7 +932,19 @@ function Icons.Resolve(name)
     if type(name) ~= "string" or name == "" then return nil end
     if name:match("^rbxassetid://") or name:match("^rbxasset://") then return name end
     local clean = name:gsub("^lucide:", "")
-    return load()[clean]
+
+    -- Once dahili haritada ara (aninda calisir, hic bekletmez)
+    if BUILTIN_ICONS[clean] then
+        return BUILTIN_ICONS[clean]
+    end
+
+    -- Dahili haritada yoksa ekstra paketten ara (arka planda yukler)
+    if extraIcons and extraIcons[clean] then
+        return extraIcons[clean]
+    end
+
+    loadExtraAsync()
+    return nil
 end
 
 -- Ikon olusturur. Bulunamazsa kisa metin/glyph olarak gosterir.
@@ -926,7 +983,7 @@ __modules["init"] = function(...)
 -- Orbit UI :: giris noktasi
 local import = ...
 
-local Orbit = { Version = "2.1.0", Windows = {} }
+local Orbit = { Version = "0.3.0", Windows = {} }
 
 Orbit.Themes = import("Themes")
 
@@ -940,7 +997,13 @@ end
 
 -- Watermark: Orbit:AddWatermark(...)
 function Orbit:AddWatermark(opts)
-    return import("Watermark")(Orbit, opts)
+    local ok, res = pcall(function()
+        return import("Watermark")(Orbit, opts)
+    end)
+    if not ok then
+        warn("[Orbit] Watermark hatasi: " .. tostring(res))
+    end
+    return res
 end
 
 -- Key System: Orbit:CreateKeySystem(...)
@@ -1475,7 +1538,6 @@ local Util = import("Util")
 local Icons = import("Icons")
 local New, Tween, Corner, Stroke, Pad = Util.New, Util.Tween, Util.Corner, Util.Stroke, Util.Pad
 
--- Eklemek icin: src/Elements/<Ad>.lua olustur ve buraya adi ekle
 local ELEMENTS = {
     "Section", "Divider", "Label", "Paragraph", "Image", "ProgressBar",
     "Button", "Toggle", "Slider", "RangeSlider", "Input", "TextArea", "Dropdown", "Keybind", "ColorPicker",
@@ -1498,6 +1560,14 @@ return function(Window, env, t)
     local page = New("ScrollingFrame", { Parent = content, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = theme.Stroke, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(), Visible = false }, {
         Pad(14, 14, 14, 14), New("UIListLayout", { Padding = UDim.new(0, 8) }),
     })
+
+    -- CanvasSize guvencesi: CanvasGroup icinde AutomaticCanvasSize calismazsa bile AbsoluteContentSize ile guncelle
+    local pageLayout = page:FindFirstChildOfClass("UIListLayout")
+    if pageLayout then
+        pageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            page.CanvasSize = UDim2.fromOffset(0, pageLayout.AbsoluteContentSize.Y + 28)
+        end)
+    end
 
     local function select()
         if state.current == Tab then return end
@@ -1536,7 +1606,6 @@ return function(Window, env, t)
         return row, label
     end
 
-    -- Arama disinda kalan (baslik/ayirici/resim) elemanlar icin isaretleyici
     function ctx.MarkStatic(inst)
         inst:SetAttribute("OrbitSearch", "")
         inst:SetAttribute("OrbitStatic", true)
@@ -1559,7 +1628,6 @@ return function(Window, env, t)
     for _, name in ipairs(ELEMENTS) do
         Tab[name] = function(_, o)
             local obj = import("Elements." .. name)(ctx, o)
-            -- o.Tooltip verilmisse son olusturulan satira ekle
             if type(o) == "table" and o.Tooltip then
                 for _, ch in ipairs(page:GetChildren()) do
                     if ch:IsA("GuiObject") and ch.LayoutOrder == order then
@@ -1794,7 +1862,6 @@ return function(Orbit, opts)
     local gui = Orbit.Gui
 
     if not gui then
-        -- GUI yoksa bagimsiz bir ScreenGui olustur
         local HttpService = game:GetService("HttpService")
         gui = New("ScreenGui", {
             Name = "OrbitWatermark_" .. HttpService:GenerateGUID(false):sub(1, 8),
@@ -1808,10 +1875,11 @@ return function(Orbit, opts)
     local showPing = opts.ShowPing ~= false
     local showTime = opts.ShowTime ~= false
     local title = opts.Title or "Orbit UI"
-    local build = opts.Build or Orbit.Version or "v2.1"
+    local build = opts.Build or Orbit.Version or "v0.3.0"
     local customText = opts.CustomText
 
-    local pos = opts.Position or UDim2.new(0, 16, 0, 16)
+    -- Roblox topbar'i altinda guvenli konum (Y = 56)
+    local pos = opts.Position or UDim2.new(0, 16, 0, 56)
 
     local frame = New("Frame", {
         Name = "Watermark", Parent = gui, Position = pos,
@@ -1826,7 +1894,6 @@ return function(Orbit, opts)
         }),
     })
 
-    -- Canli durum noktasi (Accent yanip sonme efekti)
     local dot = New("Frame", {
         Parent = frame, Size = UDim2.fromOffset(8, 8),
         BackgroundColor3 = theme.Accent, BorderSizePixel = 0, ZIndex = 301,
@@ -1851,10 +1918,45 @@ return function(Orbit, opts)
     end
     function Watermark:Toggle() Watermark:SetVisible(not Watermark.Visible) end
 
-    -- FPS & Ping hesaplama
     local fps = 60
     local lastTime = tick()
     local frameCount = 0
+
+    local function updateStats()
+        local parts = {}
+        table.insert(parts, string.format("<b>%s</b> <font color='rgb(%d,%d,%d)'>%s</font>", title, math.floor(theme.SubText.R * 255), math.floor(theme.SubText.G * 255), math.floor(theme.SubText.B * 255), build))
+
+        if customText then
+            table.insert(parts, customText)
+        end
+        if showFps then
+            table.insert(parts, string.format("<font color='rgb(%d,%d,%d)'>%d FPS</font>", math.floor(theme.Accent.R * 255), math.floor(theme.Accent.G * 255), math.floor(theme.Accent.B * 255), fps))
+        end
+        if showPing then
+            local ping = 0
+            pcall(function()
+                local net = Stats:FindFirstChild("Network")
+                local sItem = net and net:FindFirstChild("ServerStatsItem")
+                local dPing = sItem and sItem:FindFirstChild("Data Ping")
+                if dPing then
+                    ping = math.floor(tonumber(dPing:GetValueString():match("%d+")) or 0)
+                else
+                    local p = Players.LocalPlayer
+                    if p and p.GetNetworkPing then ping = math.floor((p:GetNetworkPing() or 0) * 1000) end
+                end
+            end)
+            table.insert(parts, string.format("%dms", ping))
+        end
+        if showTime then
+            local ok, tStr = pcall(function() return os.date("%H:%M:%S") end)
+            if ok and tStr then table.insert(parts, tStr) end
+        end
+
+        label.Text = table.concat(parts, "  <font color='rgb(100,100,120)'>|</font>  ")
+    end
+
+    -- Hemen ilk guncellemeyi yap (metin bos kalmasin)
+    updateStats()
 
     local conn = RunService.RenderStepped:Connect(function()
         frameCount += 1
@@ -1863,34 +1965,7 @@ return function(Orbit, opts)
             fps = math.floor(frameCount / (now - lastTime))
             frameCount = 0
             lastTime = now
-
-            local parts = {}
-            table.insert(parts, string.format("<b>%s</b> <font color='rgb(%d,%d,%d)'>%s</font>", title, math.floor(theme.SubText.R * 255), math.floor(theme.SubText.G * 255), math.floor(theme.SubText.B * 255), build))
-
-            if customText then
-                table.insert(parts, customText)
-            end
-            if showFps then
-                table.insert(parts, string.format("<font color='rgb(%d,%d,%d)'>%d FPS</font>", math.floor(theme.Accent.R * 255), math.floor(theme.Accent.G * 255), math.floor(theme.Accent.B * 255), fps))
-            end
-            if showPing then
-                local ping = 0
-                pcall(function()
-                    local item = Stats.Network.ServerStatsItem:FindFirstChild("Data Ping")
-                    if item then
-                        ping = math.floor(tonumber(item:GetValueString():match("%d+")) or 0)
-                    else
-                        local p = Players.LocalPlayer
-                        if p then ping = math.floor((p:GetNetworkPing() or 0) * 1000) end
-                    end
-                end)
-                table.insert(parts, string.format("%dms", ping))
-            end
-            if showTime then
-                table.insert(parts, os.date("%H:%M:%S"))
-            end
-
-            label.Text = table.concat(parts, "  <font color='rgb(100,100,120)'>|</font>  ")
+            updateStats()
         end
     end)
 
@@ -2030,6 +2105,12 @@ return function(Orbit, opts)
     local sidebar = New("ScrollingFrame", { Name = "Sidebar", Parent = main, Position = UDim2.fromOffset(0, 44), Size = UDim2.new(0, 158, 1, -44), BackgroundColor3 = theme.Sidebar, BorderSizePixel = 0, ScrollBarThickness = 0, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, {
         Pad(10, 10, 10, 10), New("UIListLayout", { Padding = UDim.new(0, 4) }),
     })
+    local sidebarLayout = sidebar:FindFirstChildOfClass("UIListLayout")
+    if sidebarLayout then
+        sidebarLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            sidebar.CanvasSize = UDim2.fromOffset(0, sidebarLayout.AbsoluteContentSize.Y + 20)
+        end)
+    end
     local searchBox = New("TextBox", { Name = "Search", Parent = sidebar, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = theme.Element, ClearTextOnFocus = false, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = theme.Text, PlaceholderText = "Ara...", PlaceholderColor3 = theme.SubText, Text = "", TextXAlignment = Enum.TextXAlignment.Left }, { Corner(7), Stroke(theme.Stroke), Pad(10, 0, 8, 0) })
 
     local content = New("Frame", { Name = "Content", Parent = main, Position = UDim2.fromOffset(158, 44), Size = UDim2.new(1, -158, 1, -44), BackgroundTransparency = 1, ClipsDescendants = true })
@@ -2223,7 +2304,14 @@ return function(Orbit, opts)
     import("Config")(Window, opts.ConfigFolder or "OrbitUI")
 
     function Window:Tab(t)
-        local tab = import("Tab")(Window, env, t)
+        local ok, tab = pcall(function()
+            return import("Tab")(Window, env, t)
+        end)
+        if not ok then
+            warn("[Orbit] Tab olusturulamadi: " .. tostring(tab))
+            Orbit:Notify({ Title = "Tab Hatasi", Content = tostring(tab):sub(1, 100), Type = "Error" })
+            return nil
+        end
         table.insert(Window.Tabs, tab)
         return tab
     end

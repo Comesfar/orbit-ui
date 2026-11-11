@@ -1,7 +1,7 @@
 -- Orbit UI :: giris noktasi
 local import = ...
 
-local Orbit = { Version = "2.1.0", Windows = {} }
+local Orbit = { Version = "0.3.0", Windows = {} }
 
 Orbit.Themes = import("Themes")
 
@@ -15,7 +15,13 @@ end
 
 -- Watermark: Orbit:AddWatermark(...)
 function Orbit:AddWatermark(opts)
-    return import("Watermark")(Orbit, opts)
+    local ok, res = pcall(function()
+        return import("Watermark")(Orbit, opts)
+    end)
+    if not ok then
+        warn("[Orbit] Watermark hatasi: " .. tostring(res))
+    end
+    return res
 end
 
 -- Key System: Orbit:CreateKeySystem(...)
