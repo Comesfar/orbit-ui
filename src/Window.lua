@@ -24,6 +24,9 @@ return function(Orbit, opts)
     local theme = copy(Orbit.Themes[themeName]) -- pencereye ozel kopya (canli degisebilir)
     if opts.Accent then theme.Accent = opts.Accent end
     Orbit.CurrentTheme = theme
+    if opts.NotificationPosition then
+        Orbit:SetNotificationPosition(opts.NotificationPosition)
+    end
 
     local Window = { Setters = {}, Tabs = {}, Theme = theme, ThemeName = themeName, Visible = false, ToggleKey = opts.ToggleKey or Enum.KeyCode.RightShift }
     local size = opts.Size or UDim2.fromOffset(620, 420)
@@ -228,6 +231,7 @@ return function(Orbit, opts)
         if Orbit.Gui == gui then Orbit.Gui = nil end
     end
     function Window:Notify(o) Orbit:Notify(o) end
+    function Window:SetNotificationPosition(pos) Orbit:SetNotificationPosition(pos) end
 
     ---------------------------------------------------------------- mobil ac/kapat butonu
     local mobile = New("TextButton", {

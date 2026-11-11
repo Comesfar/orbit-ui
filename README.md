@@ -4,7 +4,7 @@
 
 **Roblox Executor Scriptleri İçin Modern, Modüler ve Yüksek Performanslı Arayüz Kütüphanesi**
 
-[![Sürüm](https://img.shields.io/badge/s%C3%BCr%C3%BCm-v0.3.1--beta-5882ff?style=for-the-badge)](https://github.com/Comesfar/orbit-ui/releases)
+[![Sürüm](https://img.shields.io/badge/s%C3%BCr%C3%BCm-v0.3.2--beta-5882ff?style=for-the-badge)](https://github.com/Comesfar/orbit-ui/releases)
 [![Dil](https://img.shields.io/badge/dil-Luau-00a2ff?style=for-the-badge&logo=lua&logoColor=white)](https://luau-lang.org/)
 [![Durum](https://img.shields.io/badge/durum-Beta-f5af32?style=for-the-badge)](https://github.com/Comesfar/orbit-ui)
 
@@ -39,6 +39,7 @@
 - 🔍 **Anlık Global Arama:** Sol üstteki arama kutusu tüm sekmelerdeki ve katlanabilir kartlardaki bileşenleri anında filtreler, temizle (`×`) butonuyla tek tıkla sıfırlanır.
 - 🛡️ **Executor Güvenliği & Hata Koruması:** `cloneref` servis koruması, `gethui` / `CoreGui` / `PlayerGui` otomatik seçimi ve menüyü çökertmeyen `pcall` sarmallı callback sistemi.
 - 💾 **Otomatik Config Sistemi:** `Flag` verilen tüm bileşenleri JSON olarak kaydeder, yükler ve `EnableAutoSave` ile her değişiklikte otomatik günceller.
+- 🔔 **4 Köşeli Akıllı Bildirim Sistemi:** Bildirimler koddan (`Orbit:SetNotificationPosition("TopRight")`) veya oyun içi Ayarlar sekmesindeki açılır menüden 4 farklı köşeye (`BottomRight`, `TopRight`, `BottomLeft`, `TopLeft`) taşınabilir.
 - 🧰 **Hazır Hub Araçları:** Dahili **Key System** (anahtar doğrulama + kaydetme), **Watermark** (FPS, Ping, Saat) ve **Keybinds HUD** (aktif tuş takip paneli).
 
 ---
@@ -221,6 +222,9 @@ Dp:Refresh({ "Yeni 1", "Yeni 2" })
 
 ### 5. Zengin Bildirimler & Onay Penceresi (`Notify` & `Dialog`)
 ```lua
+-- Bildirimlerin çıkacağı köşeyi ayarla (BottomRight | TopRight | BottomLeft | TopLeft)
+Orbit:SetNotificationPosition("TopRight")
+
 Orbit:Notify({
     Title = "İşlem Tamamlandı",
     Content = "Ayarlar başarıyla uygulandı.",

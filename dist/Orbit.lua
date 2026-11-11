@@ -657,53 +657,86 @@ return function(ctx, s)
     local theme = ctx.Theme
     local open = s.Default ~= false
 
+    -- Ana kart kutusu (UIListLayout ile header ve content alt alta dizilir)
     local card = New("Frame", {
         Parent = ctx.Page, LayoutOrder = ctx.NextOrder(),
         Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundColor3 = theme.Sidebar, ClipsDescendants = true,
-    }, { Corner(9), Stroke(theme.Stroke) })
+    }, {
+        Corner(9),
+        Stroke(theme.Stroke),
+        New("UIListLayout", {
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            HorizontalAlignment = Enum.HorizontalAlignment.Center,
+            Padding = UDim.new(0, 0),
+        }),
+    })
+    card:SetAttribute("OrbitSearch", (s.Title or ""):lower())
 
+    -- Kart Basligi (tiklanabilir akordiyon baslik)
     local header = New("TextButton", {
-        Parent = card, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 36),
+        Parent = card, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 38),
         BackgroundColor3 = theme.Sidebar, AutoButtonColor = false, Text = "",
-    }, { Corner(9), Pad(10, 0, 10, 0) })
+    }, { Pad(12, 0, 12, 0) })
+
+    header.MouseEnter:Connect(function()
+        Tween(header, 0.15, { BackgroundColor3 = theme.Element })
+    end)
+    header.MouseLeave:Connect(function()
+        Tween(header, 0.15, { BackgroundColor3 = theme.Sidebar })
+    end)
 
     local xOff = 0
     if s.Icon then
-        Icons.Create(header, s.Icon, {
+        local ic = Icons.Create(header, s.Icon, {
             Size = UDim2.fromOffset(16, 16), Position = UDim2.new(0, 0, 0.5, -8),
             Color = theme.Accent,
         })
+        if ic then ic.ZIndex = 2 end
         xOff = 24
     end
 
     local titleLbl = New("TextLabel", {
         Parent = header, BackgroundTransparency = 1, Position = UDim2.fromOffset(xOff, 0),
-        Size = UDim2.new(1, -xOff - 24, 1, 0), Font = Enum.Font.GothamBold, TextSize = 13,
+        Size = UDim2.new(1, -xOff - 28, 1, 0), Font = Enum.Font.GothamBold, TextSize = 13,
         TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
-        Text = s.Title or "Section",
+        Text = s.Title or "Section", ZIndex = 2,
     })
 
-    local arrow = New("TextLabel", {
-        Parent = header, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.fromOffset(16, 16), BackgroundTransparency = 1,
-        Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = theme.SubText,
-        Text = "v", Rotation = open and 0 or -90,
+    local arrow = Icons.Create(header, "chevron-down", {
+        Size = UDim2.fromOffset(16, 16),
+        Position = UDim2.new(1, -16, 0.5, -8),
+        Color = theme.SubText,
+    })
+    if arrow then
+        arrow.Rotation = open and 0 or -90
+        arrow.ZIndex = 2
+    end
+
+    -- Baslik ile icerik arasindaki ince cizgi
+    local divider = New("Frame", {
+        Parent = card, LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 1),
+        BackgroundColor3 = theme.Stroke, BorderSizePixel = 0,
+        Visible = open,
     })
 
+    -- Icerik Alani (Kenarlardan 8px iceride, elemanlarin tasma ve kesilmesini onler)
     local content = New("Frame", {
-        Parent = card, LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0),
+        Parent = card, LayoutOrder = 3, Size = UDim2.new(1, -16, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
         Visible = open,
     }, {
-        Pad(8, 0, 8, 8),
+        Pad(0, 8, 0, 8),
         New("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
     })
 
     local function toggleState()
         open = not open
         content.Visible = open
-        Tween(arrow, 0.2, { Rotation = open and 0 or -90 })
+        divider.Visible = open
+        if arrow then
+            Tween(arrow, 0.2, { Rotation = open and 0 or -90 })
+        end
     end
     header.Activated:Connect(toggleState)
 
@@ -719,11 +752,33 @@ return function(ctx, s)
     }
     function subCtx.NextOrder() subOrder += 1 return subOrder end
     function subCtx.Row(height, title, desc)
-        local row = New("Frame", { Parent = content, LayoutOrder = subCtx.NextOrder(), Size = UDim2.new(1, 0, 0, height), BackgroundColor3 = theme.Element, ClipsDescendants = true }, { Corner(8), Stroke(theme.Stroke) })
+        local row = New("Frame", {
+            Parent = content, LayoutOrder = subCtx.NextOrder(),
+            Size = UDim2.new(1, 0, 0, height),
+            BackgroundColor3 = theme.Element, ClipsDescendants = true,
+        }, { Corner(8), Stroke(theme.Stroke) })
         row:SetAttribute("OrbitSearch", ((title or "") .. " " .. (desc or "")):lower())
-        local label = New("TextLabel", { Parent = row, BackgroundTransparency = 1, Position = UDim2.fromOffset(12, desc and 7 or 0), Size = UDim2.new(1, -24, 0, desc and 16 or math.min(height, 38)), Font = Enum.Font.GothamMedium, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.Text, Text = title or "" })
+
+        -- Ana kartin arama indeksini de guncelle
+        local oldSearch = card:GetAttribute("OrbitSearch") or ""
+        card:SetAttribute("OrbitSearch", oldSearch .. " " .. ((title or "") .. " " .. (desc or "")):lower())
+
+        local label = New("TextLabel", {
+            Parent = row, BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(12, desc and 7 or 0),
+            Size = UDim2.new(1, -24, 0, desc and 16 or math.min(height, 38)),
+            Font = Enum.Font.GothamMedium, TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.Text,
+            Text = title or "",
+        })
         if desc then
-            New("TextLabel", { Parent = row, BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 23), Size = UDim2.new(1, -24, 0, 14), Font = Enum.Font.Gotham, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.SubText, Text = desc })
+            New("TextLabel", {
+                Parent = row, BackgroundTransparency = 1,
+                Position = UDim2.fromOffset(12, 23), Size = UDim2.new(1, -24, 0, 14),
+                Font = Enum.Font.Gotham, TextSize = 11,
+                TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.SubText,
+                Text = desc,
+            })
         end
         return row, label
     end
@@ -732,7 +787,10 @@ return function(ctx, s)
         inst:SetAttribute("OrbitStatic", true)
     end
     function subCtx.Hoverable(row, height)
-        local b = New("TextButton", { Parent = row, Size = UDim2.new(1, 0, 0, height or 38), BackgroundTransparency = 1, Text = "", ZIndex = 1 })
+        local b = New("TextButton", {
+            Parent = row, Size = UDim2.new(1, 0, 0, height or 38),
+            BackgroundTransparency = 1, Text = "", ZIndex = 1,
+        })
         b.MouseEnter:Connect(function() Tween(row, 0.12, { BackgroundColor3 = theme.ElementHover }) end)
         b.MouseLeave:Connect(function() Tween(row, 0.12, { BackgroundColor3 = theme.Element }) end)
         return b
@@ -1059,7 +1117,7 @@ __modules["init"] = function(...)
 -- Orbit UI :: giris noktasi
 local import = ...
 
-local Orbit = { Version = "0.3.1-beta", Windows = {} }
+local Orbit = { Version = "0.3.2-beta", Windows = {} }
 
 Orbit.Themes = import("Themes")
 
@@ -1381,7 +1439,7 @@ end
 
 end
 __modules["Notify"] = function(...)
--- Orbit UI :: Notify (Zengin Bildirimler)
+-- Orbit UI :: Notify (Zengin Bildirimler & Konumlandirma)
 local import = ...
 local Util = import("Util")
 local Icons = import("Icons")
@@ -1403,17 +1461,73 @@ local TYPE_ICONS = {
     Error = "circle-alert",
 }
 
+-- 4 Farkli Kose Konumlandirma Ayari
+local POSITIONS = {
+    BottomRight = {
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, -16, 1, -16),
+        VerticalAlignment = Enum.VerticalAlignment.Bottom,
+        HorizontalAlignment = Enum.HorizontalAlignment.Right,
+    },
+    TopRight = {
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -16, 0, 56), -- Roblox topbar butonlarini kapatmamasi icin 56px
+        VerticalAlignment = Enum.VerticalAlignment.Top,
+        HorizontalAlignment = Enum.HorizontalAlignment.Right,
+    },
+    BottomLeft = {
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, 16, 1, -16),
+        VerticalAlignment = Enum.VerticalAlignment.Bottom,
+        HorizontalAlignment = Enum.HorizontalAlignment.Left,
+    },
+    TopLeft = {
+        AnchorPoint = Vector2.new(0, 0),
+        Position = UDim2.new(0, 16, 0, 56),
+        VerticalAlignment = Enum.VerticalAlignment.Top,
+        HorizontalAlignment = Enum.HorizontalAlignment.Left,
+    },
+}
+
 return function(Orbit)
     local holder
+    local currentPosName = "BottomRight"
+
+    local function applyHolderPosition(posName)
+        local cfg = POSITIONS[posName] or POSITIONS.BottomRight
+        currentPosName = POSITIONS[posName] and posName or "BottomRight"
+        Orbit.NotificationPosition = currentPosName
+        if holder and holder.Parent then
+            holder.AnchorPoint = cfg.AnchorPoint
+            holder.Position = cfg.Position
+            local layout = holder:FindFirstChildOfClass("UIListLayout")
+            if layout then
+                layout.VerticalAlignment = cfg.VerticalAlignment
+                layout.HorizontalAlignment = cfg.HorizontalAlignment
+            end
+        end
+    end
 
     local function ensureHolder(gui)
         if holder and holder.Parent then return holder end
+        local cfg = POSITIONS[currentPosName] or POSITIONS.BottomRight
         holder = New("Frame", {
             Name = "Notifications", Parent = gui, BackgroundTransparency = 1,
-            AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -16, 1, -16), Size = UDim2.fromOffset(320, 460),
+            AnchorPoint = cfg.AnchorPoint, Position = cfg.Position, Size = UDim2.fromOffset(320, 480),
             ZIndex = 500,
-        }, { New("UIListLayout", { Padding = UDim.new(0, 8), VerticalAlignment = Enum.VerticalAlignment.Bottom, HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }) })
+        }, {
+            New("UIListLayout", {
+                Padding = UDim.new(0, 8),
+                VerticalAlignment = cfg.VerticalAlignment,
+                HorizontalAlignment = cfg.HorizontalAlignment,
+                SortOrder = Enum.SortOrder.LayoutOrder,
+            })
+        })
         return holder
+    end
+
+    function Orbit:SetNotificationPosition(pos)
+        applyHolderPosition(pos)
     end
 
     local function playSound(soundId)
@@ -1434,6 +1548,12 @@ return function(Orbit)
         opts = opts or {}
         if not self.Gui then return end
         local theme = self.CurrentTheme or Orbit.Themes.Dark
+
+        -- Eger ozel bir kose verilmisse o anlik degistirilebilir
+        if opts.Position and POSITIONS[opts.Position] then
+            applyHolderPosition(opts.Position)
+        end
+
         local parent = ensureHolder(self.Gui)
 
         local nType = opts.Type or "Info"
@@ -1443,18 +1563,32 @@ return function(Orbit)
 
         if opts.Sound then playSound(opts.Sound) end
 
-        local card = New("CanvasGroup", {
+        -- Dis konteyner ve yumusak golge (DropShadow)
+        local cardHolder = New("Frame", {
             Parent = parent, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundTransparency = 1, ZIndex = 500,
+        })
+
+        local shadow = New("ImageLabel", {
+            Parent = cardHolder, BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(-12, -12), Size = UDim2.new(1, 24, 1, 24),
+            Image = "rbxassetid://6014261993", ImageColor3 = Color3.new(0, 0, 0),
+            ImageTransparency = 0.5, ScaleType = Enum.ScaleType.Slice,
+            SliceCenter = Rect.new(49, 49, 450, 450), ZIndex = 500,
+        })
+
+        local card = New("CanvasGroup", {
+            Parent = cardHolder, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
             BackgroundColor3 = theme.Background, GroupTransparency = 1, ZIndex = 501,
         }, {
-            Corner(10), Stroke(theme.Stroke), Pad(12, 12, 12, 12),
-            New("UIListLayout", { Padding = UDim.new(0, 6) }),
+            Corner(10), Stroke(theme.Stroke), Pad(14, 12, 14, 14),
+            New("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
         })
 
         -- Baslik satiri (ikon + baslik + kapat butonu)
         local header = New("Frame", {
             Parent = card, LayoutOrder = 1, BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, 20),
+            Size = UDim2.new(1, 0, 0, 20), ZIndex = 502,
         })
 
         local xOff = 0
@@ -1463,22 +1597,24 @@ return function(Orbit)
                 Size = UDim2.fromOffset(18, 18), Position = UDim2.fromOffset(0, 1),
                 Color = accentColor,
             })
-            ic.ZIndex = 502
+            if ic then ic.ZIndex = 502 end
             xOff = 24
         end
 
         New("TextLabel", {
             Parent = header, BackgroundTransparency = 1,
-            Position = UDim2.fromOffset(xOff, 0), Size = UDim2.new(1, -xOff - 20, 1, 0),
+            Position = UDim2.fromOffset(xOff, 0), Size = UDim2.new(1, -xOff - 24, 1, 0),
             Font = Enum.Font.GothamBold, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left,
             TextColor3 = theme.Text, Text = opts.Title or "Bildirim", ZIndex = 502,
         })
 
         local closeBtn = New("TextButton", {
             Parent = header, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
-            Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, Font = Enum.Font.GothamBold,
-            TextSize = 12, TextColor3 = theme.SubText, Text = "X", ZIndex = 503,
+            Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, Font = Enum.Font.GothamBold,
+            TextSize = 13, TextColor3 = theme.SubText, Text = "X", ZIndex = 503,
         })
+        closeBtn.MouseEnter:Connect(function() Tween(closeBtn, 0.12, { TextColor3 = theme.Text }) end)
+        closeBtn.MouseLeave:Connect(function() Tween(closeBtn, 0.12, { TextColor3 = theme.SubText }) end)
 
         if opts.Content then
             New("TextLabel", {
@@ -1490,30 +1626,39 @@ return function(Orbit)
             })
         end
 
-        -- Butonlar
         local closed = false
         local function dismiss()
             if closed then return end
             closed = true
-            Tween(card, 0.2, { GroupTransparency = 1 }).Completed:Wait()
-            card:Destroy()
+            Tween(card, 0.2, { GroupTransparency = 1 })
+            Tween(shadow, 0.2, { ImageTransparency = 1 }).Completed:Wait()
+            cardHolder:Destroy()
         end
         closeBtn.Activated:Connect(dismiss)
 
+        -- Butonlar
         if opts.Buttons and #opts.Buttons > 0 then
             local btnRow = New("Frame", {
                 Parent = card, LayoutOrder = 3, BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 26), ZIndex = 502,
-            }, { New("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, Padding = UDim.new(0, 6) }) })
+                Size = UDim2.new(1, 0, 0, 28), ZIndex = 502,
+            }, { New("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, Padding = UDim.new(0, 8) }) })
 
             for _, b in ipairs(opts.Buttons) do
                 local bg = b.Danger and theme.Danger or (b.Primary and accentColor or theme.Element)
                 local txtCol = (b.Danger or b.Primary) and Color3.new(1, 1, 1) or theme.Text
                 local btn = New("TextButton", {
-                    Parent = btnRow, Size = UDim2.fromOffset(72, 26), BackgroundColor3 = bg,
-                    AutoButtonColor = false, Font = Enum.Font.GothamMedium, TextSize = 11,
+                    Parent = btnRow, Size = UDim2.fromOffset(80, 28), BackgroundColor3 = bg,
+                    AutoButtonColor = false, Font = Enum.Font.GothamMedium, TextSize = 12,
                     TextColor3 = txtCol, Text = b.Title or "Tamam", ZIndex = 503,
                 }, { Corner(6) })
+
+                btn.MouseEnter:Connect(function()
+                    Tween(btn, 0.12, { BackgroundTransparency = 0.15 })
+                end)
+                btn.MouseLeave:Connect(function()
+                    Tween(btn, 0.12, { BackgroundTransparency = 0 })
+                end)
+
                 btn.Activated:Connect(function()
                     dismiss()
                     if b.Callback then task.spawn(b.Callback) end
@@ -1521,13 +1666,15 @@ return function(Orbit)
             end
         end
 
-        -- Ilerleme cubugu
+        -- Alttaki Sure Cubugu (Progress Bar)
         local bar = New("Frame", {
             Parent = card, LayoutOrder = 4, Size = UDim2.new(1, 0, 0, 2),
             BackgroundColor3 = accentColor, BorderSizePixel = 0, ZIndex = 502,
         }, { Corner(1) })
 
         Tween(card, 0.25, { GroupTransparency = 0 })
+        Tween(shadow, 0.25, { ImageTransparency = 0.5 })
+
         if duration and duration > 0 then
             Tween(bar, duration, { Size = UDim2.new(0, 0, 0, 2) }, Enum.EasingStyle.Linear)
             task.delay(duration, function()
@@ -1561,6 +1708,23 @@ return function(Window, Orbit, o)
         Window:ResetAccent()
         accent:Set(Window.Theme.Accent, true)
     end })
+
+    Tab:Dropdown({
+        Title = "Bildirim Konumu",
+        Flag = "Orbit_NotifyPosition",
+        Values = { "Sag Alt (BottomRight)", "Sag Ust (TopRight)", "Sol Alt (BottomLeft)", "Sol Ust (TopLeft)" },
+        Default = "Sag Alt (BottomRight)",
+        Callback = function(v)
+            local pos = v:match("%((%w+)%)") or "BottomRight"
+            Orbit:SetNotificationPosition(pos)
+            Orbit:Notify({
+                Title = "Bildirim Konumu",
+                Content = "Bildirimler artik bu kosede gorunecek!",
+                Type = "Info",
+                Duration = 2.5,
+            })
+        end,
+    })
 
     Tab:Section("Overlay & Araclar")
     local watermarkInstance
@@ -2114,6 +2278,9 @@ return function(Orbit, opts)
     local theme = copy(Orbit.Themes[themeName]) -- pencereye ozel kopya (canli degisebilir)
     if opts.Accent then theme.Accent = opts.Accent end
     Orbit.CurrentTheme = theme
+    if opts.NotificationPosition then
+        Orbit:SetNotificationPosition(opts.NotificationPosition)
+    end
 
     local Window = { Setters = {}, Tabs = {}, Theme = theme, ThemeName = themeName, Visible = false, ToggleKey = opts.ToggleKey or Enum.KeyCode.RightShift }
     local size = opts.Size or UDim2.fromOffset(620, 420)
@@ -2318,6 +2485,7 @@ return function(Orbit, opts)
         if Orbit.Gui == gui then Orbit.Gui = nil end
     end
     function Window:Notify(o) Orbit:Notify(o) end
+    function Window:SetNotificationPosition(pos) Orbit:SetNotificationPosition(pos) end
 
     ---------------------------------------------------------------- mobil ac/kapat butonu
     local mobile = New("TextButton", {

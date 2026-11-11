@@ -19,6 +19,23 @@ return function(Window, Orbit, o)
         accent:Set(Window.Theme.Accent, true)
     end })
 
+    Tab:Dropdown({
+        Title = "Bildirim Konumu",
+        Flag = "Orbit_NotifyPosition",
+        Values = { "Sag Alt (BottomRight)", "Sag Ust (TopRight)", "Sol Alt (BottomLeft)", "Sol Ust (TopLeft)" },
+        Default = "Sag Alt (BottomRight)",
+        Callback = function(v)
+            local pos = v:match("%((%w+)%)") or "BottomRight"
+            Orbit:SetNotificationPosition(pos)
+            Orbit:Notify({
+                Title = "Bildirim Konumu",
+                Content = "Bildirimler artik bu kosede gorunecek!",
+                Type = "Info",
+                Duration = 2.5,
+            })
+        end,
+    })
+
     Tab:Section("Overlay & Araclar")
     local watermarkInstance
     Tab:Toggle({ Title = "Watermark", Default = false, Callback = function(v)

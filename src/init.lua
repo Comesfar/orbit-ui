@@ -1,7 +1,7 @@
 -- Orbit UI :: giris noktasi
 local import = ...
 
-local Orbit = { Version = "0.3.1-beta", Windows = {} }
+local Orbit = { Version = "0.3.2-beta", Windows = {} }
 
 Orbit.Themes = import("Themes")
 

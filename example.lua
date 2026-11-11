@@ -1,5 +1,5 @@
 -- ============================================================================
--- Orbit UI v0.3.1-beta — Kapsamli Ozellik Test Scripti (Showcase)
+-- Orbit UI v0.3.2-beta — Kapsamli Ozellik Test Scripti (Showcase)
 -- ============================================================================
 local Orbit = loadstring(game:HttpGet("https://raw.githubusercontent.com/Comesfar/orbit-ui/main/dist/Orbit.lua"))()
 
@@ -19,7 +19,7 @@ Orbit:CreateTheme("Cyberpunk", {
 -- 2) Ana Pencere (9-Slice DropShadow + Mobil Buton + Arama Kutusu)
 local Window = Orbit:CreateWindow({
 	Title = "Orbit Hub",
-	Subtitle = "v0.3.1-beta",
+	Subtitle = "v0.3.2-beta",
 	Theme = "Midnight",                  -- Dark | Midnight | Rose | Light | Cyberpunk
 	ToggleKey = Enum.KeyCode.RightShift, -- Menuyu ac/kapat tusu
 	Blur = false,
@@ -29,7 +29,7 @@ local Window = Orbit:CreateWindow({
 -- 3) Sol Ust Watermark (Sürüklenebilir FPS / Ping / Saat)
 local Watermark = Orbit:AddWatermark({
 	Title = "Orbit Hub",
-	Build = "v0.3.1-beta",
+	Build = "v0.3.2-beta",
 	ShowFPS = true,
 	ShowPing = true,
 	ShowTime = true,
@@ -291,23 +291,23 @@ BildirimTab:Button({
 })
 
 BildirimTab:Button({
-	Title = "Hata Bildirimi (Error) + Onay Penceresi (Dialog)",
+	Title = "Hata Bildirimi (Error) + Modal Onay Penceresi",
 	Icon = "trash",
 	Callback = function()
 		Orbit:Notify({
-			Title = "Bağlantı Uyarısı",
-			Content = "Sunucu yanıt vermedi, tekrar denemek ister misin?",
+			Title = "Ayarları Sıfırla?",
+			Content = "Hareket hızını ve zıplama gücünü orijinal değerlere döndürmek istiyor musun?",
 			Type = "Error",
 			Sound = true,
-			Duration = 6,
+			Duration = 7,
 			Buttons = {
 				{
-					Title = "Dialog Aç",
+					Title = "Sıfırla",
 					Primary = true,
 					Callback = function()
 						Window:Dialog({
-							Title = "Ayarları Sıfırla?",
-							Content = "Yürüme hızı ve zıplama gücü varsayılan değerlere döndürülsün mü?",
+							Title = "Emin misin?",
+							Content = "Yürüme hızı 16, zıplama gücü 50 olarak sıfırlanacak.",
 							Buttons = {
 								{ Title = "İptal" },
 								{
@@ -316,6 +316,7 @@ BildirimTab:Button({
 									Callback = function()
 										Window.Flags.walkspeed:Set(16)
 										Window.Flags.jumppower:Set(50)
+										Orbit:Notify({ Title = "Sıfırlandı", Content = "Değerler başarıyla sıfırlandı.", Type = "Success", Duration = 3 })
 									end,
 								},
 							},
@@ -323,6 +324,25 @@ BildirimTab:Button({
 					end,
 				},
 			},
+		})
+	end,
+})
+
+BildirimTab:Section("Bildirim Konumu (Canlı Değiştir)")
+
+BildirimTab:Dropdown({
+	Title = "Bildirimlerin Çıkacağı Köşe",
+	Flag = "demo_notify_pos",
+	Values = { "Sağ Alt (BottomRight)", "Sağ Üst (TopRight)", "Sol Alt (BottomLeft)", "Sol Üst (TopLeft)" },
+	Default = "Sağ Alt (BottomRight)",
+	Callback = function(secim)
+		local pos = secim:match("%((%w+)%)") or "BottomRight"
+		Orbit:SetNotificationPosition(pos)
+		Orbit:Notify({
+			Title = "Köşe Değiştirildi",
+			Content = "Bildirimler artık " .. secim .. " köşesinde gösterilecek!",
+			Type = "Info",
+			Duration = 3,
 		})
 	end,
 })
@@ -353,7 +373,7 @@ Window:AddSettingsTab()
 
 -- Açılış bildirimi
 Orbit:Notify({
-	Title = "Orbit UI v0.3.1-beta",
+	Title = "Orbit UI v0.3.2-beta",
 	Content = "Hoş geldin! Yeni özellikleri sekmelerden test edebilirsin.",
 	Type = "Success",
 	Duration = 5,
