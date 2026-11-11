@@ -60,14 +60,14 @@ return function(ctx, o)
     local function build()
         for _, b in pairs(buttons) do b:Destroy() end
         buttons = {}
-        for _, v in ipairs(values) do
-            local b = New("TextButton", { Parent = list, Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = theme.Accent, BackgroundTransparency = 1, AutoButtonColor = false, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = theme.SubText, TextXAlignment = Enum.TextXAlignment.Left, Text = tostring(v) }, { Corner(6), Pad(10, 0, 10, 0) })
+        for idx, v in ipairs(values) do
+            local b = New("TextButton", { Parent = list, LayoutOrder = idx, Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = theme.Accent, BackgroundTransparency = 1, AutoButtonColor = false, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = theme.SubText, TextXAlignment = Enum.TextXAlignment.Left, Text = tostring(v) }, { Corner(6), Pad(10, 0, 10, 0) })
             buttons[v] = b
             b.Activated:Connect(function()
                 if multi then selected[v] = not selected[v] or nil else selected = v end
                 if o.Flag then Window.Flags[o.Flag] = value() end
                 refresh()
-                if o.Callback then task.spawn(o.Callback, value()) end
+                if o.Callback then ctx.Call(o.Callback, value()) end
                 if not multi then obj:Close() end
             end)
         end
@@ -82,7 +82,7 @@ return function(ctx, o)
         end
         if o.Flag then Window.Flags[o.Flag] = value() end
         refresh()
-        if not silent and o.Callback then task.spawn(o.Callback, value()) end
+        if not silent and o.Callback then ctx.Call(o.Callback, value()) end
     end
     function obj:Get() return value() end
     function obj:Refresh(newValues)

@@ -35,17 +35,17 @@ return function(ctx, o)
         svKnob.Position = UDim2.fromScale(s, 1 - v)
         hueKnob.Position = UDim2.fromScale(0.5, h)
         if o.Flag then Window.Flags[o.Flag] = color end
-        if fire and o.Callback then task.spawn(o.Callback, color) end
+        if fire and o.Callback then ctx.Call(o.Callback, color) end
     end
     Util.Drag(sv, function(pos)
         s = math.clamp((pos.X - sv.AbsolutePosition.X) / sv.AbsoluteSize.X, 0, 1)
         v = 1 - math.clamp((pos.Y - sv.AbsolutePosition.Y) / sv.AbsoluteSize.Y, 0, 1)
         render(true)
-    end)
+    end, ctx.Connect)
     Util.Drag(hue, function(pos)
         h = math.clamp((pos.Y - hue.AbsolutePosition.Y) / hue.AbsoluteSize.Y, 0, 1)
         render(true)
-    end)
+    end, ctx.Connect)
     local open = false
     hbtn.Activated:Connect(function()
         open = not open

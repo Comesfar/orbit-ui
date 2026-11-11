@@ -10,14 +10,14 @@ return function(ctx, o)
     function obj:Set(v, silent)
         box.Text = tostring(v)
         if o.Flag then Window.Flags[o.Flag] = box.Text end
-        if not silent and o.Callback then task.spawn(o.Callback, box.Text) end
+        if not silent and o.Callback then ctx.Call(o.Callback, box.Text) end
     end
     function obj:Get() return box.Text end
     box.Focused:Connect(function() Tween(box.UIStroke, 0.15, { Color = theme.Accent }) end)
     box.FocusLost:Connect(function(enter)
         Tween(box.UIStroke, 0.15, { Color = theme.Stroke })
         if o.Flag then Window.Flags[o.Flag] = box.Text end
-        if (enter or not o.EnterOnly) and o.Callback then task.spawn(o.Callback, box.Text) end
+        if (enter or not o.EnterOnly) and o.Callback then ctx.Call(o.Callback, box.Text) end
     end)
     ctx.Register(o.Flag, box.Text, function(v) obj:Set(v) end)
     return obj

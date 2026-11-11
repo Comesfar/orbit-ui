@@ -9,6 +9,9 @@ local Util = {}
 
 function Util.New(class, props, children)
     local inst = Instance.new(class)
+    if class == "UIListLayout" and (not props or props.SortOrder == nil) then
+        inst.SortOrder = Enum.SortOrder.LayoutOrder
+    end
     for k, v in pairs(props or {}) do
         if k ~= "Parent" then inst[k] = v end
     end
@@ -46,7 +49,10 @@ function Util.GetGuiParent()
     return Players.LocalPlayer:WaitForChild("PlayerGui")
 end
 
-function Util.MakeDraggable(handle, target)
+local function defaultConnect(signal, fn) return signal:Connect(fn) end
+
+function Util.MakeDraggable(handle, target, connect)
+    connect = connect or defaultConnect
     local dragging, startPos, startInput
     handle.InputBegan:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
@@ -56,7 +62,7 @@ function Util.MakeDraggable(handle, target)
             end)
         end
     end)
-    UserInputService.InputChanged:Connect(function(i)
+    connect(UserInputService.InputChanged, function(i)
         if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
             local d = i.Position - startInput
             target.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
@@ -65,20 +71,22 @@ function Util.MakeDraggable(handle, target)
 end
 
 -- Surukleme sirasinda input takibi (slider, color picker)
-function Util.Drag(frame, callback)
+-- callback(pos, isStart)
+function Util.Drag(frame, callback, connect)
+    connect = connect or defaultConnect
     local active = false
     frame.InputBegan:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
             active = true
-            callback(i.Position)
+            callback(i.Position, true)
         end
     end)
-    UserInputService.InputEnded:Connect(function(i)
+    connect(UserInputService.InputEnded, function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then active = false end
     end)
-    UserInputService.InputChanged:Connect(function(i)
+    connect(UserInputService.InputChanged, function(i)
         if active and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
-            callback(i.Position)
+            callback(i.Position, false)
         end
     end)
 end

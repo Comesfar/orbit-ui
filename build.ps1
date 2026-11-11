@@ -1,4 +1,4 @@
-# Tum src/ modullerini tek dosyaya birlestirir -> dist/Orbit.lua
+﻿# Tum src/ modullerini tek dosyaya birlestirir -> dist/Orbit.lua
 $root = $PSScriptRoot
 $src = Join-Path $root "src"
 $out = Join-Path $root "dist\Orbit.lua"
@@ -11,7 +11,7 @@ $sb = New-Object System.Text.StringBuilder
 Get-ChildItem $src -Recurse -Filter *.lua | Sort-Object FullName | ForEach-Object {
     $rel = $_.FullName.Substring($src.Length + 1)
     $name = ($rel -replace '\.lua$', '') -replace '[\\/]', '.'
-    $code = [IO.File]::ReadAllText($_.FullName)
+    $code = [IO.File]::ReadAllText($_.FullName).TrimStart([char]0xFEFF)
     [void]$sb.AppendLine("__modules[`"$name`"] = function(...)")
     [void]$sb.AppendLine($code)
     [void]$sb.AppendLine("end")

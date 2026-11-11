@@ -25,7 +25,7 @@ return {
     },
     Light = {
         Background = Color3.fromRGB(242, 243, 247), Sidebar = Color3.fromRGB(232, 234, 240),
-        Element = Color3.fromRGB(255, 255, 255), ElementHover = Color3.fromRGB(240, 242, 248),
+        Element = Color3.fromRGB(252, 252, 254), ElementHover = Color3.fromRGB(240, 242, 248),
         Stroke = Color3.fromRGB(215, 218, 228), Text = Color3.fromRGB(30, 32, 42),
         SubText = Color3.fromRGB(110, 115, 135), Accent = Color3.fromRGB(70, 110, 240),
         Danger = Color3.fromRGB(220, 60, 70),

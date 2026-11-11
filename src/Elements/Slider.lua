@@ -24,13 +24,13 @@ return function(ctx, o)
         value = v
         if o.Flag then Window.Flags[o.Flag] = value end
         render()
-        if not silent and o.Callback then task.spawn(o.Callback, value) end
+        if not silent and o.Callback then ctx.Call(o.Callback, value) end
     end
     function obj:Get() return value end
     Util.Drag(track, function(pos)
         local a = math.clamp((pos.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
         obj:Set(min + (max - min) * a)
-    end)
+    end, ctx.Connect)
     render()
     ctx.Register(o.Flag, value, function(v) obj:Set(v) end)
     return obj

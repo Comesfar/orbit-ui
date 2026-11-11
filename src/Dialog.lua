@@ -30,7 +30,7 @@ return function(Window, env)
             local btn = New("TextButton", { Parent = row, Size = UDim2.fromOffset(90, 32), BackgroundColor3 = color, AutoButtonColor = false, Font = Enum.Font.GothamMedium, TextSize = 13, TextColor3 = neutral and theme.Text or Color3.new(1, 1, 1), Text = b.Title, ZIndex = 53 }, { Corner(7) })
             btn.Activated:Connect(function()
                 task.spawn(close)
-                if b.Callback then task.spawn(b.Callback) end
+                if b.Callback then env.Call(b.Callback) end
             end)
         end
         Tween(overlay, 0.2, { BackgroundTransparency = 0.45 })
