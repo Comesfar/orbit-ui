@@ -6,7 +6,7 @@ local New, Tween, Corner, Stroke, Pad = Util.New, Util.Tween, Util.Corner, Util.
 
 -- Eklemek icin: src/Elements/<Ad>.lua olustur ve buraya adi ekle
 local ELEMENTS = {
-    "Section", "Divider", "Label", "Paragraph", "Image",
+    "Section", "Divider", "Label", "Paragraph", "Image", "ProgressBar",
     "Button", "Toggle", "Slider", "RangeSlider", "Input", "TextArea", "Dropdown", "Keybind", "ColorPicker",
 }
 

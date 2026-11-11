@@ -365,22 +365,38 @@ return function(ctx, o)
     local theme, Window = ctx.Theme, ctx.Window
     local key = o.Default or Enum.KeyCode.Unknown
     local listening = false
+    local bindId = o.Flag or o.Title
+
+    local function syncKeybindList(state)
+        if Window.UpdateKeybind then
+            Window:UpdateKeybind(bindId, {
+                Title = o.Title,
+                Key = key,
+                State = state or false,
+            })
+        end
+    end
+
     local row = ctx.Row(o.Description and 44 or 38, o.Title, o.Description)
     local btn = New("TextButton", { Parent = row, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(90, 26), BackgroundColor3 = theme.Background, AutoButtonColor = false, Font = Enum.Font.GothamMedium, TextSize = 12, TextColor3 = theme.Text, Text = key.Name }, { Corner(6), Stroke(theme.Stroke) })
     local obj = {}
+
     function obj:Set(k, silent)
         if typeof(k) == "string" then k = Enum.KeyCode[k] end
         key = k
         btn.Text = key.Name
         if o.Flag then Window.Flags[o.Flag] = key end
+        syncKeybindList(false)
         if not silent and o.Changed then ctx.Call(o.Changed, key) end
     end
     function obj:Get() return key end
+
     btn.Activated:Connect(function()
         listening = true
         btn.Text = "..."
         Tween(btn.UIStroke, 0.15, { Color = theme.Accent })
     end)
+
     ctx.Connect(UserInputService.InputBegan, function(i, gp)
         if listening then
             if i.UserInputType == Enum.UserInputType.Keyboard then
@@ -389,10 +405,14 @@ return function(ctx, o)
                 Tween(btn.UIStroke, 0.15, { Color = theme.Stroke })
             end
         elseif not gp and i.KeyCode == key and key ~= Enum.KeyCode.Unknown then
+            syncKeybindList(true)
+            task.delay(0.25, function() syncKeybindList(false) end)
             if o.Callback then ctx.Call(o.Callback, key) end
         end
     end)
+
     ctx.Register(o.Flag, key, function(v) obj:Set(v) end)
+    syncKeybindList(false)
     return obj
 end
 
@@ -421,6 +441,63 @@ return function(ctx, p)
     local title = New("TextLabel", { Parent = row, LayoutOrder = 1, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16), Font = Enum.Font.GothamBold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.Text, Text = p.Title or "" })
     local body = New("TextLabel", { Parent = row, LayoutOrder = 2, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Font = Enum.Font.Gotham, TextSize = 12, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.SubText, Text = p.Content or "" })
     return { Set = function(_, t, c) if t then title.Text = t end if c then body.Text = c end end }
+end
+
+end
+__modules["Elements.ProgressBar"] = function(...)
+local import = ...
+local Util = import("Util")
+local New, Tween, Corner = Util.New, Util.Tween, Util.Corner
+
+-- ProgressBar({ Title, Min, Max, Default, Suffix, Flag })
+return function(ctx, o)
+    local theme, Window = ctx.Theme, ctx.Window
+    local min, max = o.Min or 0, o.Max or 100
+    local value = math.clamp(o.Default or min, min, max)
+
+    local row, label = ctx.Row(48, o.Title)
+    label.Size = UDim2.new(1, -90, 0, 24)
+
+    local valLabel = New("TextLabel", {
+        Parent = row, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -12, 0, 0), Size = UDim2.fromOffset(80, 24),
+        Font = Enum.Font.GothamMedium, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right,
+        TextColor3 = theme.SubText, Text = "",
+    })
+
+    local track = New("Frame", {
+        Parent = row, Position = UDim2.new(0, 12, 0, 28), Size = UDim2.new(1, -24, 0, 8),
+        BackgroundColor3 = theme.Stroke,
+    }, { Corner(4) })
+
+    local fill = New("Frame", {
+        Parent = track, Size = UDim2.fromScale(0, 1), BackgroundColor3 = theme.Accent,
+    }, { Corner(4) })
+
+    local obj = {}
+
+    local function render(animate)
+        local a = math.clamp((value - min) / (max - min), 0, 1)
+        valLabel.Text = tostring(math.floor(value + 0.5)) .. (o.Suffix or "")
+        if animate ~= false then
+            Tween(fill, 0.25, { Size = UDim2.fromScale(a, 1) })
+        else
+            fill.Size = UDim2.fromScale(a, 1)
+        end
+    end
+
+    function obj:Set(v, animate)
+        value = math.clamp(v, min, max)
+        if o.Flag then Window.Flags[o.Flag] = value end
+        render(animate)
+    end
+
+    function obj:Get() return value end
+    function obj:SetTitle(t) label.Text = t end
+
+    render(false)
+    ctx.Register(o.Flag, value, function(v) obj:Set(v, false) end)
+    return obj
 end
 
 end
@@ -494,12 +571,136 @@ end
 __modules["Elements.Section"] = function(...)
 local import = ...
 local Util = import("Util")
-local New = Util.New
+local Icons = import("Icons")
+local New, Tween, Corner, Stroke, Pad = Util.New, Util.Tween, Util.Corner, Util.Stroke, Util.Pad
+
+local ELEMENTS = {
+    "Divider", "Label", "Paragraph", "Image", "ProgressBar",
+    "Button", "Toggle", "Slider", "RangeSlider", "Input", "TextArea", "Dropdown", "Keybind", "ColorPicker",
+}
 
 return function(ctx, s)
-    s = type(s) == "string" and { Title = s } or s
-    local l = New("TextLabel", { Parent = ctx.Page, LayoutOrder = ctx.NextOrder(), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22), Font = Enum.Font.GothamBold, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = ctx.Theme.Accent, Text = string.upper(s.Title or "") })
-    ctx.MarkStatic(l)
+    if type(s) == "string" then
+        s = { Title = s }
+    end
+    s = s or {}
+
+    -- Eger Collapsible istenmiyorsa basit baslik etiketi olarak kal
+    if not s.Collapsible then
+        local l = New("TextLabel", {
+            Parent = ctx.Page, LayoutOrder = ctx.NextOrder(), BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 22), Font = Enum.Font.GothamBold, TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = ctx.Theme.Accent,
+            Text = string.upper(s.Title or ""),
+        })
+        ctx.MarkStatic(l)
+        return {
+            SetTitle = function(_, t) l.Text = string.upper(t) end,
+        }
+    end
+
+    -- Collapsible Kart / Grup Bolumu
+    local theme = ctx.Theme
+    local open = s.Default ~= false
+
+    local card = New("Frame", {
+        Parent = ctx.Page, LayoutOrder = ctx.NextOrder(),
+        Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundColor3 = theme.Sidebar, ClipsDescendants = true,
+    }, { Corner(9), Stroke(theme.Stroke) })
+
+    local header = New("TextButton", {
+        Parent = card, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 36),
+        BackgroundColor3 = theme.Sidebar, AutoButtonColor = false, Text = "",
+    }, { Corner(9), Pad(10, 0, 10, 0) })
+
+    local xOff = 0
+    if s.Icon then
+        Icons.Create(header, s.Icon, {
+            Size = UDim2.fromOffset(16, 16), Position = UDim2.new(0, 0, 0.5, -8),
+            Color = theme.Accent,
+        })
+        xOff = 24
+    end
+
+    local titleLbl = New("TextLabel", {
+        Parent = header, BackgroundTransparency = 1, Position = UDim2.fromOffset(xOff, 0),
+        Size = UDim2.new(1, -xOff - 24, 1, 0), Font = Enum.Font.GothamBold, TextSize = 13,
+        TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+        Text = s.Title or "Section",
+    })
+
+    local arrow = New("TextLabel", {
+        Parent = header, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
+        Size = UDim2.fromOffset(16, 16), BackgroundTransparency = 1,
+        Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = theme.SubText,
+        Text = "v", Rotation = open and 0 or -90,
+    })
+
+    local content = New("Frame", {
+        Parent = card, LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
+        Visible = open,
+    }, {
+        Pad(8, 0, 8, 8),
+        New("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+    })
+
+    local function toggleState()
+        open = not open
+        content.Visible = open
+        Tween(arrow, 0.2, { Rotation = open and 0 or -90 })
+    end
+    header.Activated:Connect(toggleState)
+
+    -- Alt elemanlar icin ozel baglam
+    local subOrder = 0
+    local subCtx = {
+        Window = ctx.Window,
+        Tab = ctx.Tab,
+        Theme = theme,
+        Page = content,
+        Connect = ctx.Connect,
+        Call = ctx.Call,
+    }
+    function subCtx.NextOrder() subOrder += 1 return subOrder end
+    function subCtx.Row(height, title, desc)
+        local row = New("Frame", { Parent = content, LayoutOrder = subCtx.NextOrder(), Size = UDim2.new(1, 0, 0, height), BackgroundColor3 = theme.Element, ClipsDescendants = true }, { Corner(8), Stroke(theme.Stroke) })
+        row:SetAttribute("OrbitSearch", ((title or "") .. " " .. (desc or "")):lower())
+        local label = New("TextLabel", { Parent = row, BackgroundTransparency = 1, Position = UDim2.fromOffset(12, desc and 7 or 0), Size = UDim2.new(1, -24, 0, desc and 16 or math.min(height, 38)), Font = Enum.Font.GothamMedium, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.Text, Text = title or "" })
+        if desc then
+            New("TextLabel", { Parent = row, BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 23), Size = UDim2.new(1, -24, 0, 14), Font = Enum.Font.Gotham, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.SubText, Text = desc })
+        end
+        return row, label
+    end
+    function subCtx.MarkStatic(inst)
+        inst:SetAttribute("OrbitSearch", "")
+        inst:SetAttribute("OrbitStatic", true)
+    end
+    function subCtx.Hoverable(row, height)
+        local b = New("TextButton", { Parent = row, Size = UDim2.new(1, 0, 0, height or 38), BackgroundTransparency = 1, Text = "", ZIndex = 1 })
+        b.MouseEnter:Connect(function() Tween(row, 0.12, { BackgroundColor3 = theme.ElementHover }) end)
+        b.MouseLeave:Connect(function() Tween(row, 0.12, { BackgroundColor3 = theme.Element }) end)
+        return b
+    end
+    function subCtx.Register(flag, default, setter)
+        ctx.Register(flag, default, setter)
+    end
+
+    local SectionObj = {
+        Frame = card,
+        Content = content,
+        Toggle = toggleState,
+        SetTitle = function(_, t) titleLbl.Text = t end,
+    }
+
+    for _, name in ipairs(ELEMENTS) do
+        SectionObj[name] = function(_, o)
+            return import("Elements." .. name)(subCtx, o)
+        end
+    end
+
+    return SectionObj
 end
 
 end
@@ -587,6 +788,7 @@ return function(ctx, o)
     local state = o.Default or false
     local hasBind = o.Keybind ~= nil
     local key = (typeof(o.Keybind) == "EnumItem") and o.Keybind or Enum.KeyCode.Unknown
+    local bindId = o.Flag or o.Title
 
     local row = ctx.Row(o.Description and 44 or 38, o.Title, o.Description)
     local btn = ctx.Hoverable(row, 44)
@@ -594,19 +796,32 @@ return function(ctx, o)
     local track = New("Frame", { Parent = row, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(38, 20), BackgroundColor3 = theme.Stroke }, { Corner(10) })
     local knob = New("Frame", { Parent = track, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 3, 0.5, 0), Size = UDim2.fromOffset(14, 14), BackgroundColor3 = Color3.new(1, 1, 1) }, { Corner(7) })
 
+    local function syncKeybindList()
+        if hasBind and Window.UpdateKeybind then
+            Window:UpdateKeybind(bindId, {
+                Title = o.Title,
+                Key = key,
+                State = state,
+            })
+        end
+    end
+
     local obj = {}
     local function render(animate)
         local t = animate and 0.18 or 0
         Tween(track, t, { BackgroundColor3 = state and theme.Accent or theme.Stroke })
         Tween(knob, t, { Position = state and UDim2.new(1, -17, 0.5, 0) or UDim2.new(0, 3, 0.5, 0) })
     end
+
     function obj:Set(v, silent)
         state = v and true or false
         if o.Flag then Window.Flags[o.Flag] = state end
         render(true)
+        syncKeybindList()
         if not silent and o.Callback then ctx.Call(o.Callback, state) end
     end
     function obj:Get() return state end
+
     btn.Activated:Connect(function() obj:Set(not state) end)
     render(false)
     ctx.Register(o.Flag, state, function(v) obj:Set(v) end)
@@ -620,6 +835,7 @@ return function(ctx, o)
             key = k
             keyBtn.Text = key.Name
             if o.Flag then Window.Flags[o.Flag .. "_bind"] = key end
+            syncKeybindList()
         end
         keyBtn.Activated:Connect(function()
             listening = true
@@ -640,6 +856,7 @@ return function(ctx, o)
         function obj:SetKey(k) setKey(k) end
         function obj:GetKey() return key end
         ctx.Register(o.Flag and (o.Flag .. "_bind"), key, setKey)
+        syncKeybindList()
     end
     return obj
 end
@@ -709,7 +926,7 @@ __modules["init"] = function(...)
 -- Orbit UI :: giris noktasi
 local import = ...
 
-local Orbit = { Version = "2.0.0", Windows = {} }
+local Orbit = { Version = "2.1.0", Windows = {} }
 
 Orbit.Themes = import("Themes")
 
@@ -721,14 +938,321 @@ function Orbit:CreateWindow(opts)
     return import("Window")(Orbit, opts)
 end
 
+-- Watermark: Orbit:AddWatermark(...)
+function Orbit:AddWatermark(opts)
+    return import("Watermark")(Orbit, opts)
+end
+
+-- Key System: Orbit:CreateKeySystem(...)
+function Orbit:CreateKeySystem(opts)
+    return import("KeySystem")(Orbit, opts)
+end
+
 return Orbit
 
 end
-__modules["Notify"] = function(...)
--- Orbit UI :: Notify
+__modules["KeybindList"] = function(...)
+-- Orbit UI :: KeybindList (Ekranda tus ve ozellik durumu paneli)
 local import = ...
 local Util = import("Util")
+local Icons = import("Icons")
 local New, Tween, Corner, Stroke, Pad = Util.New, Util.Tween, Util.Corner, Util.Stroke, Util.Pad
+
+return function(Window, opts)
+    opts = opts or {}
+    local theme = Window.Theme
+    local gui = Window.Gui
+
+    local frame = New("CanvasGroup", {
+        Name = "KeybindList", Parent = gui,
+        Position = opts.Position or UDim2.new(0, 16, 0.4, 0),
+        Size = UDim2.fromOffset(180, 0), AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundColor3 = theme.Background, GroupTransparency = 0, ZIndex = 250,
+    }, {
+        Corner(10), Stroke(theme.Stroke),
+        New("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) }),
+    })
+
+    -- Baslik
+    local top = New("Frame", {
+        Parent = frame, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 32),
+        BackgroundColor3 = theme.Sidebar, BorderSizePixel = 0, ZIndex = 251,
+    }, {
+        Pad(10, 0, 10, 0),
+        New("UIStroke", { Color = theme.Stroke, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+    })
+    Icons.Create(top, "keyboard", {
+        Size = UDim2.fromOffset(14, 14), Position = UDim2.new(0, 0, 0.5, -7), Color = theme.Accent,
+    }).ZIndex = 252
+    New("TextLabel", {
+        Parent = top, BackgroundTransparency = 1, Position = UDim2.fromOffset(20, 0),
+        Size = UDim2.new(1, -20, 1, 0), Font = Enum.Font.GothamBold, TextSize = 12,
+        TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+        Text = opts.Title or "Keybinds", ZIndex = 252,
+    })
+
+    Util.MakeDraggable(top, frame, Window.Connect)
+
+    -- Liste konteyneri
+    local list = New("Frame", {
+        Parent = frame, LayoutOrder = 2, BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+        ZIndex = 251,
+    }, {
+        Pad(8, 6, 8, 8),
+        New("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
+    })
+
+    local entries = {}
+    local KeybindList = { Frame = frame, Visible = true }
+
+    function KeybindList:SetVisible(v)
+        KeybindList.Visible = v
+        frame.Visible = v
+    end
+    function KeybindList:Toggle() KeybindList:SetVisible(not KeybindList.Visible) end
+
+    function KeybindList:Update(id, data)
+        if not id then return end
+        local item = entries[id]
+
+        -- Eger gosterilmeyecekse veya kaldirilacaksa
+        if data == nil or data.Hidden or data.Key == Enum.KeyCode.Unknown then
+            if item then
+                item.Row:Destroy()
+                entries[id] = nil
+            end
+            return
+        end
+
+        local keyName = typeof(data.Key) == "EnumItem" and data.Key.Name or tostring(data.Key or "?")
+        local state = data.State
+
+        if not item then
+            local row = New("Frame", {
+                Parent = list, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 20),
+                ZIndex = 252,
+            })
+            local titleLbl = New("TextLabel", {
+                Parent = row, BackgroundTransparency = 1, Size = UDim2.new(1, -70, 1, 0),
+                Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = theme.Text,
+                TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+                Text = data.Title or id, ZIndex = 253,
+            })
+            local badge = New("TextLabel", {
+                Parent = row, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
+                Size = UDim2.fromOffset(68, 18), BackgroundTransparency = 1,
+                Font = Enum.Font.GothamMedium, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right,
+                RichText = true, ZIndex = 253,
+            })
+            item = { Row = row, TitleLabel = titleLbl, Badge = badge }
+            entries[id] = item
+        end
+
+        item.TitleLabel.Text = data.Title or id
+        local stateStr = state and string.format("<font color='rgb(%d,%d,%d)'>[ON]</font>", math.floor(theme.Accent.R * 255), math.floor(theme.Accent.G * 255), math.floor(theme.Accent.B * 255))
+            or string.format("<font color='rgb(%d,%d,%d)'>[OFF]</font>", math.floor(theme.SubText.R * 255), math.floor(theme.SubText.G * 255), math.floor(theme.SubText.B * 255))
+        item.Badge.Text = string.format("[%s] %s", keyName, stateStr)
+    end
+
+    function KeybindList:Remove(id)
+        if entries[id] then
+            entries[id].Row:Destroy()
+            entries[id] = nil
+        end
+    end
+
+    function KeybindList:Destroy()
+        frame:Destroy()
+        table.clear(entries)
+    end
+
+    return KeybindList
+end
+
+end
+__modules["KeySystem"] = function(...)
+-- Orbit UI :: KeySystem (Anahtar Dogrulama Arayuzu)
+local import = ...
+local Util = import("Util")
+local Icons = import("Icons")
+local New, Tween, Corner, Stroke, Pad = Util.New, Util.Tween, Util.Corner, Util.Stroke, Util.Pad
+
+local HttpService = game:GetService("HttpService")
+
+return function(Orbit, opts)
+    opts = opts or {}
+    local theme = Orbit.CurrentTheme or Orbit.Themes.Dark
+    local folder = opts.ConfigFolder or "OrbitUI"
+    local savePath = folder .. "/saved_key.txt"
+
+    local function canFS()
+        return writefile and readfile and isfolder and makefolder and isfile
+    end
+
+    local function checkKey(key)
+        if opts.CheckKey then
+            local ok, res = pcall(opts.CheckKey, key)
+            return ok and res
+        end
+        if opts.Keys then
+            for _, k in ipairs(opts.Keys) do
+                if k == key then return true end
+            end
+        end
+        if opts.Key and opts.Key == key then return true end
+        return false
+    end
+
+    -- Otomatik hatirlanan key kontrolu
+    if opts.SaveKey ~= false and canFS() and isfile(savePath) then
+        local saved = readfile(savePath):gsub("%s+", "")
+        if checkKey(saved) then
+            if opts.Callback then task.spawn(opts.Callback, true) end
+            return
+        end
+    end
+
+    -- GUI olustur
+    local gui = New("ScreenGui", {
+        Name = "OrbitKeySystem_" .. HttpService:GenerateGUID(false):sub(1, 8),
+        ResetOnSpawn = false, DisplayOrder = 1000, IgnoreGuiInset = true,
+    })
+    pcall(function() if syn and syn.protect_gui then syn.protect_gui(gui) end end)
+    gui.Parent = Util.GetGuiParent()
+
+    local card = New("CanvasGroup", {
+        Name = "KeyCard", Parent = gui, AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(360, 0),
+        AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = theme.Background,
+        GroupTransparency = 1, ZIndex = 600,
+    }, {
+        Corner(12), Stroke(theme.Stroke), Pad(18, 16, 18, 16),
+        New("UIListLayout", { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center }),
+    })
+
+    -- Baslik alani
+    local topRow = New("Frame", {
+        Parent = card, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1,
+    })
+    Icons.Create(topRow, "key", {
+        Size = UDim2.fromOffset(20, 20), Position = UDim2.new(0, 0, 0.5, -10),
+        Color = theme.Accent,
+    })
+    New("TextLabel", {
+        Parent = topRow, BackgroundTransparency = 1, Position = UDim2.fromOffset(28, 0),
+        Size = UDim2.new(1, -28, 1, 0), Font = Enum.Font.GothamBold, TextSize = 16,
+        TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+        Text = opts.Title or "Key System",
+    })
+
+    if opts.Subtitle or opts.Note then
+        New("TextLabel", {
+            Parent = card, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y, Font = Enum.Font.Gotham, TextSize = 12,
+            TextColor3 = theme.SubText, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
+            Text = opts.Note or opts.Subtitle or "Lutfen anahtarinizi girin.",
+        })
+    end
+
+    -- Girdi kutusu
+    local inputWrap = New("Frame", {
+        Parent = card, Size = UDim2.new(1, 0, 0, 36), BackgroundColor3 = theme.Element,
+    }, { Corner(8), Stroke(theme.Stroke), Pad(10, 0, 10, 0) })
+
+    local box = New("TextBox", {
+        Parent = inputWrap, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+        ClearTextOnFocus = false, Font = Enum.Font.Gotham, TextSize = 13,
+        TextColor3 = theme.Text, PlaceholderText = "Anahtar buraya...", PlaceholderColor3 = theme.SubText,
+        Text = "",
+    })
+
+    -- Butonlar
+    local btnRow = New("Frame", {
+        Parent = card, Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1,
+    }, { New("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }) })
+
+    local verifyBtn = New("TextButton", {
+        Parent = btnRow, Size = UDim2.new(opts.Link and 0.55 or 1, -4, 1, 0),
+        BackgroundColor3 = theme.Accent, AutoButtonColor = false,
+        Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Color3.new(1, 1, 1),
+        Text = "Dogrula",
+    }, { Corner(8) })
+
+    if opts.Link then
+        local linkBtn = New("TextButton", {
+            Parent = btnRow, Size = UDim2.new(0.45, -4, 1, 0),
+            BackgroundColor3 = theme.Element, AutoButtonColor = false,
+            Font = Enum.Font.GothamMedium, TextSize = 12, TextColor3 = theme.Text,
+            Text = "Key Al",
+        }, { Corner(8), Stroke(theme.Stroke) })
+
+        linkBtn.Activated:Connect(function()
+            local setClip = setclipboard or toclipboard or (Clipboard and Clipboard.set)
+            if setClip then
+                setClip(opts.Link)
+                Orbit:Notify({ Title = "Kopyalandi", Content = "Key linki panoya kopyalandi!", Type = "Success" })
+            else
+                Orbit:Notify({ Title = "Link", Content = opts.Link, Duration = 8 })
+            end
+        end)
+    end
+
+    Util.MakeDraggable(topRow, card)
+
+    -- Dogrulama islemi
+    local function verify()
+        local entered = box.Text:gsub("%s+", "")
+        if checkKey(entered) then
+            Tween(inputWrap.UIStroke, 0.15, { Color = Color3.fromRGB(50, 205, 120) })
+            if opts.SaveKey ~= false and canFS() then
+                if not isfolder(folder) then makefolder(folder) end
+                writefile(savePath, entered)
+            end
+            Orbit:Notify({ Title = "Basarili", Content = "Key dogrulandi! Yukleniyor...", Type = "Success", Duration = 3 })
+            Tween(card, 0.25, { GroupTransparency = 1 }).Completed:Wait()
+            gui:Destroy()
+            if opts.Callback then task.spawn(opts.Callback, true) end
+        else
+            Tween(inputWrap.UIStroke, 0.15, { Color = theme.Danger })
+            Orbit:Notify({ Title = "Gecersiz Key", Content = "Girdiginiz anahtar yanlis, tekrar deneyin.", Type = "Error" })
+            task.delay(1, function()
+                Tween(inputWrap.UIStroke, 0.15, { Color = theme.Stroke })
+            end)
+        end
+    end
+
+    verifyBtn.Activated:Connect(verify)
+    box.FocusLost:Connect(function(enter)
+        if enter then verify() end
+    end)
+
+    Tween(card, 0.3, { GroupTransparency = 0 })
+end
+
+end
+__modules["Notify"] = function(...)
+-- Orbit UI :: Notify (Zengin Bildirimler)
+local import = ...
+local Util = import("Util")
+local Icons = import("Icons")
+local New, Tween, Corner, Stroke, Pad = Util.New, Util.Tween, Util.Corner, Util.Stroke, Util.Pad
+
+local SoundService = game:GetService("SoundService")
+
+local TYPE_COLORS = {
+    Info = Color3.fromRGB(88, 130, 255),
+    Success = Color3.fromRGB(50, 205, 120),
+    Warning = Color3.fromRGB(245, 175, 50),
+    Error = Color3.fromRGB(240, 75, 85),
+}
+
+local TYPE_ICONS = {
+    Info = "info",
+    Success = "circle-check",
+    Warning = "triangle-alert",
+    Error = "circle-alert",
+}
 
 return function(Orbit)
     local holder
@@ -737,9 +1261,24 @@ return function(Orbit)
         if holder and holder.Parent then return holder end
         holder = New("Frame", {
             Name = "Notifications", Parent = gui, BackgroundTransparency = 1,
-            AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -16, 1, -16), Size = UDim2.fromOffset(300, 400),
+            AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -16, 1, -16), Size = UDim2.fromOffset(320, 460),
+            ZIndex = 500,
         }, { New("UIListLayout", { Padding = UDim.new(0, 8), VerticalAlignment = Enum.VerticalAlignment.Bottom, HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }) })
         return holder
+    end
+
+    local function playSound(soundId)
+        if not soundId then return end
+        task.spawn(function()
+            local id = soundId == true and "rbxassetid://4590662766" or (typeof(soundId) == "number" and ("rbxassetid://" .. soundId) or soundId)
+            local s = Instance.new("Sound")
+            s.SoundId = tostring(id)
+            s.Volume = 0.5
+            s.Parent = SoundService
+            s:Play()
+            s.Ended:Connect(function() s:Destroy() end)
+            task.delay(3, function() if s and s.Parent then s:Destroy() end end)
+        end)
     end
 
     function Orbit:Notify(opts)
@@ -747,25 +1286,107 @@ return function(Orbit)
         if not self.Gui then return end
         local theme = self.CurrentTheme or Orbit.Themes.Dark
         local parent = ensureHolder(self.Gui)
-        local duration = opts.Duration or 4
+
+        local nType = opts.Type or "Info"
+        local accentColor = TYPE_COLORS[nType] or theme.Accent
+        local iconName = opts.Icon or TYPE_ICONS[nType]
+        local duration = opts.Duration or (opts.Buttons and 8 or 4)
+
+        if opts.Sound then playSound(opts.Sound) end
+
         local card = New("CanvasGroup", {
             Parent = parent, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-            BackgroundColor3 = theme.Background, GroupTransparency = 1,
+            BackgroundColor3 = theme.Background, GroupTransparency = 1, ZIndex = 501,
         }, {
-            Corner(8), Stroke(theme.Stroke), Pad(12, 10, 12, 14),
-            New("UIListLayout", { Padding = UDim.new(0, 2) }),
+            Corner(10), Stroke(theme.Stroke), Pad(12, 12, 12, 12),
+            New("UIListLayout", { Padding = UDim.new(0, 6) }),
         })
-        New("TextLabel", { Parent = card, LayoutOrder = 1, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 18), Font = Enum.Font.GothamBold, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.Text, Text = opts.Title or "Bildirim" })
-        if opts.Content then
-            New("TextLabel", { Parent = card, LayoutOrder = 2, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Font = Enum.Font.Gotham, TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.SubText, Text = opts.Content })
+
+        -- Baslik satiri (ikon + baslik + kapat butonu)
+        local header = New("Frame", {
+            Parent = card, LayoutOrder = 1, BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 20),
+        })
+
+        local xOff = 0
+        if iconName then
+            local ic = Icons.Create(header, iconName, {
+                Size = UDim2.fromOffset(18, 18), Position = UDim2.fromOffset(0, 1),
+                Color = accentColor,
+            })
+            ic.ZIndex = 502
+            xOff = 24
         end
-        local bar = New("Frame", { Parent = card, LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = theme.Accent, BorderSizePixel = 0 }, { Corner(1) })
-        Tween(card, 0.25, { GroupTransparency = 0 })
-        Tween(bar, duration, { Size = UDim2.new(0, 0, 0, 2) }, Enum.EasingStyle.Linear)
-        task.delay(duration, function()
-            Tween(card, 0.25, { GroupTransparency = 1 }).Completed:Wait()
+
+        New("TextLabel", {
+            Parent = header, BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(xOff, 0), Size = UDim2.new(1, -xOff - 20, 1, 0),
+            Font = Enum.Font.GothamBold, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left,
+            TextColor3 = theme.Text, Text = opts.Title or "Bildirim", ZIndex = 502,
+        })
+
+        local closeBtn = New("TextButton", {
+            Parent = header, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
+            Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, Font = Enum.Font.GothamBold,
+            TextSize = 12, TextColor3 = theme.SubText, Text = "X", ZIndex = 503,
+        })
+
+        if opts.Content then
+            New("TextLabel", {
+                Parent = card, LayoutOrder = 2, BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+                Font = Enum.Font.Gotham, TextSize = 13, TextWrapped = true,
+                TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.SubText,
+                Text = opts.Content, ZIndex = 502,
+            })
+        end
+
+        -- Butonlar
+        local closed = false
+        local function dismiss()
+            if closed then return end
+            closed = true
+            Tween(card, 0.2, { GroupTransparency = 1 }).Completed:Wait()
             card:Destroy()
-        end)
+        end
+        closeBtn.Activated:Connect(dismiss)
+
+        if opts.Buttons and #opts.Buttons > 0 then
+            local btnRow = New("Frame", {
+                Parent = card, LayoutOrder = 3, BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 26), ZIndex = 502,
+            }, { New("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, Padding = UDim.new(0, 6) }) })
+
+            for _, b in ipairs(opts.Buttons) do
+                local bg = b.Danger and theme.Danger or (b.Primary and accentColor or theme.Element)
+                local txtCol = (b.Danger or b.Primary) and Color3.new(1, 1, 1) or theme.Text
+                local btn = New("TextButton", {
+                    Parent = btnRow, Size = UDim2.fromOffset(72, 26), BackgroundColor3 = bg,
+                    AutoButtonColor = false, Font = Enum.Font.GothamMedium, TextSize = 11,
+                    TextColor3 = txtCol, Text = b.Title or "Tamam", ZIndex = 503,
+                }, { Corner(6) })
+                btn.Activated:Connect(function()
+                    dismiss()
+                    if b.Callback then task.spawn(b.Callback) end
+                end)
+            end
+        end
+
+        -- Ilerleme cubugu
+        local bar = New("Frame", {
+            Parent = card, LayoutOrder = 4, Size = UDim2.new(1, 0, 0, 2),
+            BackgroundColor3 = accentColor, BorderSizePixel = 0, ZIndex = 502,
+        }, { Corner(1) })
+
+        Tween(card, 0.25, { GroupTransparency = 0 })
+        if duration and duration > 0 then
+            Tween(bar, duration, { Size = UDim2.new(0, 0, 0, 2) }, Enum.EasingStyle.Linear)
+            task.delay(duration, function()
+                if not closed then dismiss() end
+            end)
+        else
+            bar.Visible = false
+        end
     end
 end
 
@@ -792,6 +1413,27 @@ return function(Window, Orbit, o)
         accent:Set(Window.Theme.Accent, true)
     end })
 
+    Tab:Section("Overlay & Araclar")
+    local watermarkInstance
+    Tab:Toggle({ Title = "Watermark", Default = false, Callback = function(v)
+        if v then
+            if not watermarkInstance then watermarkInstance = Window:AddWatermark() end
+            watermarkInstance:SetVisible(true)
+        else
+            if watermarkInstance then watermarkInstance:SetVisible(false) end
+        end
+    end })
+
+    local keyListInstance
+    Tab:Toggle({ Title = "Keybind Listesi", Default = false, Callback = function(v)
+        if v then
+            if not keyListInstance then keyListInstance = Window:CreateKeybindList() end
+            keyListInstance:SetVisible(true)
+        else
+            if keyListInstance then keyListInstance:SetVisible(false) end
+        end
+    end })
+
     Tab:Section("Kontroller")
     Tab:Keybind({ Title = "Menu Tusu", Flag = "Orbit_ToggleKey", Default = Window.ToggleKey, Tooltip = "ESC ile tusu kaldirabilirsin",
         Changed = function(k) Window.ToggleKey = k end })
@@ -804,14 +1446,14 @@ return function(Window, Orbit, o)
     list = Tab:Dropdown({ Title = "Kayitli configler", Values = Window:ListConfigs(), Callback = function(v) cfgName = v end })
     Tab:Button({ Title = "Kaydet", Callback = function()
         local ok, err = Window:SaveConfig(cfgName)
-        Window:Notify({ Title = ok and "Kaydedildi" or "Hata", Content = ok and cfgName or tostring(err) })
+        Window:Notify({ Title = ok and "Kaydedildi" or "Hata", Content = ok and cfgName or tostring(err), Type = ok and "Success" or "Error" })
         list:Refresh(Window:ListConfigs())
     end })
     Tab:Button({ Title = "Yukle", Callback = function()
         local ok, err = Window:LoadConfig(cfgName)
-        Window:Notify({ Title = ok and "Yuklendi" or "Hata", Content = ok and cfgName or tostring(err) })
+        Window:Notify({ Title = ok and "Yuklendi" or "Hata", Content = ok and cfgName or tostring(err), Type = ok and "Success" or "Error" })
     end })
-    Tab:Toggle({ Title = "Otomatik Kaydet", Description = "Her degisiklikte seçili config'e yazar", Callback = function(v)
+    Tab:Toggle({ Title = "Otomatik Kaydet", Description = "Her degisiklikte secili config'e yazar", Callback = function(v)
         if v then Window:EnableAutoSave(cfgName) else Window:DisableAutoSave() end
     end })
 
@@ -835,7 +1477,7 @@ local New, Tween, Corner, Stroke, Pad = Util.New, Util.Tween, Util.Corner, Util.
 
 -- Eklemek icin: src/Elements/<Ad>.lua olustur ve buraya adi ekle
 local ELEMENTS = {
-    "Section", "Divider", "Label", "Paragraph", "Image",
+    "Section", "Divider", "Label", "Paragraph", "Image", "ProgressBar",
     "Button", "Toggle", "Slider", "RangeSlider", "Input", "TextArea", "Dropdown", "Keybind", "ColorPicker",
 }
 
@@ -1136,6 +1778,131 @@ end
 return Util
 
 end
+__modules["Watermark"] = function(...)
+-- Orbit UI :: Watermark (FPS, Ping, Saat ve Bilgi Ekrani)
+local import = ...
+local Util = import("Util")
+local New, Tween, Corner, Stroke, Pad = Util.New, Util.Tween, Util.Corner, Util.Stroke, Util.Pad
+
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+local Players = game:GetService("Players")
+
+return function(Orbit, opts)
+    opts = opts or {}
+    local theme = Orbit.CurrentTheme or Orbit.Themes.Dark
+    local gui = Orbit.Gui
+
+    if not gui then
+        -- GUI yoksa bagimsiz bir ScreenGui olustur
+        local HttpService = game:GetService("HttpService")
+        gui = New("ScreenGui", {
+            Name = "OrbitWatermark_" .. HttpService:GenerateGUID(false):sub(1, 8),
+            ResetOnSpawn = false, DisplayOrder = 998, IgnoreGuiInset = true,
+        })
+        pcall(function() if syn and syn.protect_gui then syn.protect_gui(gui) end end)
+        gui.Parent = Util.GetGuiParent()
+    end
+
+    local showFps = opts.ShowFPS ~= false
+    local showPing = opts.ShowPing ~= false
+    local showTime = opts.ShowTime ~= false
+    local title = opts.Title or "Orbit UI"
+    local build = opts.Build or Orbit.Version or "v2.1"
+    local customText = opts.CustomText
+
+    local pos = opts.Position or UDim2.new(0, 16, 0, 16)
+
+    local frame = New("Frame", {
+        Name = "Watermark", Parent = gui, Position = pos,
+        Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X,
+        BackgroundColor3 = theme.Background, ZIndex = 300,
+    }, {
+        Corner(14), Stroke(theme.Stroke), Pad(10, 4, 10, 4),
+        New("UIListLayout", {
+            FillDirection = Enum.FillDirection.Horizontal,
+            VerticalAlignment = Enum.VerticalAlignment.Center,
+            Padding = UDim.new(0, 8),
+        }),
+    })
+
+    -- Canli durum noktasi (Accent yanip sonme efekti)
+    local dot = New("Frame", {
+        Parent = frame, Size = UDim2.fromOffset(8, 8),
+        BackgroundColor3 = theme.Accent, BorderSizePixel = 0, ZIndex = 301,
+    }, { Corner(4) })
+
+    local label = New("TextLabel", {
+        Parent = frame, BackgroundTransparency = 1,
+        Size = UDim2.fromOffset(0, 20), AutomaticSize = Enum.AutomaticSize.X,
+        Font = Enum.Font.GothamMedium, TextSize = 12, TextColor3 = theme.Text,
+        RichText = true, Text = "", ZIndex = 301,
+    })
+
+    Util.MakeDraggable(frame, frame)
+
+    local Watermark = { Frame = frame, Visible = true }
+
+    function Watermark:SetTitle(t) title = t end
+    function Watermark:SetCustomText(t) customText = t end
+    function Watermark:SetVisible(v)
+        Watermark.Visible = v
+        frame.Visible = v
+    end
+    function Watermark:Toggle() Watermark:SetVisible(not Watermark.Visible) end
+
+    -- FPS & Ping hesaplama
+    local fps = 60
+    local lastTime = tick()
+    local frameCount = 0
+
+    local conn = RunService.RenderStepped:Connect(function()
+        frameCount += 1
+        local now = tick()
+        if now - lastTime >= 0.5 then
+            fps = math.floor(frameCount / (now - lastTime))
+            frameCount = 0
+            lastTime = now
+
+            local parts = {}
+            table.insert(parts, string.format("<b>%s</b> <font color='rgb(%d,%d,%d)'>%s</font>", title, math.floor(theme.SubText.R * 255), math.floor(theme.SubText.G * 255), math.floor(theme.SubText.B * 255), build))
+
+            if customText then
+                table.insert(parts, customText)
+            end
+            if showFps then
+                table.insert(parts, string.format("<font color='rgb(%d,%d,%d)'>%d FPS</font>", math.floor(theme.Accent.R * 255), math.floor(theme.Accent.G * 255), math.floor(theme.Accent.B * 255), fps))
+            end
+            if showPing then
+                local ping = 0
+                pcall(function()
+                    local item = Stats.Network.ServerStatsItem:FindFirstChild("Data Ping")
+                    if item then
+                        ping = math.floor(tonumber(item:GetValueString():match("%d+")) or 0)
+                    else
+                        local p = Players.LocalPlayer
+                        if p then ping = math.floor((p:GetNetworkPing() or 0) * 1000) end
+                    end
+                end)
+                table.insert(parts, string.format("%dms", ping))
+            end
+            if showTime then
+                table.insert(parts, os.date("%H:%M:%S"))
+            end
+
+            label.Text = table.concat(parts, "  <font color='rgb(100,100,120)'>|</font>  ")
+        end
+    end)
+
+    function Watermark:Destroy()
+        if conn then conn:Disconnect() end
+        frame:Destroy()
+    end
+
+    return Watermark
+end
+
+end
 __modules["Window"] = function(...)
 -- Orbit UI :: Window
 local import = ...
@@ -1332,6 +2099,7 @@ return function(Orbit, opts)
         table.clear(conns)
         Window.AutoSaveName = nil
         if blur then blur:Destroy() end
+        if Window.KeybindList then Window.KeybindList:Destroy() end
         gui:Destroy()
         for i, w in ipairs(Orbit.Windows) do
             if w == Window then table.remove(Orbit.Windows, i) break end
@@ -1425,6 +2193,28 @@ return function(Orbit, opts)
     function Window:ResetAccent()
         Window.CustomAccent = nil
         return Window:SetTheme(Window.ThemeName)
+    end
+
+    ---------------------------------------------------------------- keybind listesi & watermark
+    Window.Keybinds = {}
+    function Window:UpdateKeybind(id, data)
+        Window.Keybinds[id] = data
+        if Window.KeybindList then
+            Window.KeybindList:Update(id, data)
+        end
+    end
+
+    function Window:CreateKeybindList(o)
+        local kl = import("KeybindList")(Window, o)
+        Window.KeybindList = kl
+        for id, data in pairs(Window.Keybinds) do
+            kl:Update(id, data)
+        end
+        return kl
+    end
+
+    function Window:AddWatermark(o)
+        return Orbit:AddWatermark(o)
     end
 
     ---------------------------------------------------------------- alt moduller

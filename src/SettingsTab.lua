@@ -19,6 +19,27 @@ return function(Window, Orbit, o)
         accent:Set(Window.Theme.Accent, true)
     end })
 
+    Tab:Section("Overlay & Araclar")
+    local watermarkInstance
+    Tab:Toggle({ Title = "Watermark", Default = false, Callback = function(v)
+        if v then
+            if not watermarkInstance then watermarkInstance = Window:AddWatermark() end
+            watermarkInstance:SetVisible(true)
+        else
+            if watermarkInstance then watermarkInstance:SetVisible(false) end
+        end
+    end })
+
+    local keyListInstance
+    Tab:Toggle({ Title = "Keybind Listesi", Default = false, Callback = function(v)
+        if v then
+            if not keyListInstance then keyListInstance = Window:CreateKeybindList() end
+            keyListInstance:SetVisible(true)
+        else
+            if keyListInstance then keyListInstance:SetVisible(false) end
+        end
+    end })
+
     Tab:Section("Kontroller")
     Tab:Keybind({ Title = "Menu Tusu", Flag = "Orbit_ToggleKey", Default = Window.ToggleKey, Tooltip = "ESC ile tusu kaldirabilirsin",
         Changed = function(k) Window.ToggleKey = k end })
@@ -31,14 +52,14 @@ return function(Window, Orbit, o)
     list = Tab:Dropdown({ Title = "Kayitli configler", Values = Window:ListConfigs(), Callback = function(v) cfgName = v end })
     Tab:Button({ Title = "Kaydet", Callback = function()
         local ok, err = Window:SaveConfig(cfgName)
-        Window:Notify({ Title = ok and "Kaydedildi" or "Hata", Content = ok and cfgName or tostring(err) })
+        Window:Notify({ Title = ok and "Kaydedildi" or "Hata", Content = ok and cfgName or tostring(err), Type = ok and "Success" or "Error" })
         list:Refresh(Window:ListConfigs())
     end })
     Tab:Button({ Title = "Yukle", Callback = function()
         local ok, err = Window:LoadConfig(cfgName)
-        Window:Notify({ Title = ok and "Yuklendi" or "Hata", Content = ok and cfgName or tostring(err) })
+        Window:Notify({ Title = ok and "Yuklendi" or "Hata", Content = ok and cfgName or tostring(err), Type = ok and "Success" or "Error" })
     end })
-    Tab:Toggle({ Title = "Otomatik Kaydet", Description = "Her degisiklikte seçili config'e yazar", Callback = function(v)
+    Tab:Toggle({ Title = "Otomatik Kaydet", Description = "Her degisiklikte secili config'e yazar", Callback = function(v)
         if v then Window:EnableAutoSave(cfgName) else Window:DisableAutoSave() end
     end })
 

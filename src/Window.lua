@@ -193,6 +193,7 @@ return function(Orbit, opts)
         table.clear(conns)
         Window.AutoSaveName = nil
         if blur then blur:Destroy() end
+        if Window.KeybindList then Window.KeybindList:Destroy() end
         gui:Destroy()
         for i, w in ipairs(Orbit.Windows) do
             if w == Window then table.remove(Orbit.Windows, i) break end
@@ -286,6 +287,28 @@ return function(Orbit, opts)
     function Window:ResetAccent()
         Window.CustomAccent = nil
         return Window:SetTheme(Window.ThemeName)
+    end
+
+    ---------------------------------------------------------------- keybind listesi & watermark
+    Window.Keybinds = {}
+    function Window:UpdateKeybind(id, data)
+        Window.Keybinds[id] = data
+        if Window.KeybindList then
+            Window.KeybindList:Update(id, data)
+        end
+    end
+
+    function Window:CreateKeybindList(o)
+        local kl = import("KeybindList")(Window, o)
+        Window.KeybindList = kl
+        for id, data in pairs(Window.Keybinds) do
+            kl:Update(id, data)
+        end
+        return kl
+    end
+
+    function Window:AddWatermark(o)
+        return Orbit:AddWatermark(o)
     end
 
     ---------------------------------------------------------------- alt moduller

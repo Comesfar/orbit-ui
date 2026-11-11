@@ -10,6 +10,7 @@ return function(ctx, o)
     local state = o.Default or false
     local hasBind = o.Keybind ~= nil
     local key = (typeof(o.Keybind) == "EnumItem") and o.Keybind or Enum.KeyCode.Unknown
+    local bindId = o.Flag or o.Title
 
     local row = ctx.Row(o.Description and 44 or 38, o.Title, o.Description)
     local btn = ctx.Hoverable(row, 44)
@@ -17,19 +18,32 @@ return function(ctx, o)
     local track = New("Frame", { Parent = row, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(38, 20), BackgroundColor3 = theme.Stroke }, { Corner(10) })
     local knob = New("Frame", { Parent = track, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 3, 0.5, 0), Size = UDim2.fromOffset(14, 14), BackgroundColor3 = Color3.new(1, 1, 1) }, { Corner(7) })
 
+    local function syncKeybindList()
+        if hasBind and Window.UpdateKeybind then
+            Window:UpdateKeybind(bindId, {
+                Title = o.Title,
+                Key = key,
+                State = state,
+            })
+        end
+    end
+
     local obj = {}
     local function render(animate)
         local t = animate and 0.18 or 0
         Tween(track, t, { BackgroundColor3 = state and theme.Accent or theme.Stroke })
         Tween(knob, t, { Position = state and UDim2.new(1, -17, 0.5, 0) or UDim2.new(0, 3, 0.5, 0) })
     end
+
     function obj:Set(v, silent)
         state = v and true or false
         if o.Flag then Window.Flags[o.Flag] = state end
         render(true)
+        syncKeybindList()
         if not silent and o.Callback then ctx.Call(o.Callback, state) end
     end
     function obj:Get() return state end
+
     btn.Activated:Connect(function() obj:Set(not state) end)
     render(false)
     ctx.Register(o.Flag, state, function(v) obj:Set(v) end)
@@ -43,6 +57,7 @@ return function(ctx, o)
             key = k
             keyBtn.Text = key.Name
             if o.Flag then Window.Flags[o.Flag .. "_bind"] = key end
+            syncKeybindList()
         end
         keyBtn.Activated:Connect(function()
             listening = true
@@ -63,6 +78,7 @@ return function(ctx, o)
         function obj:SetKey(k) setKey(k) end
         function obj:GetKey() return key end
         ctx.Register(o.Flag and (o.Flag .. "_bind"), key, setKey)
+        syncKeybindList()
     end
     return obj
 end
