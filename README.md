@@ -35,3 +35,14 @@ orbit-ui/
 2. `src/Tab.lua` icindeki `ELEMENTS` listesine `"Ad"` ekle. `Tab:Ad({...})` hazir.
 
 Modul kurali: her dosya `local import = ...` ile baslar, bagimliliklari `import("Util")` ile alir.
+
+## v2.0 ozellikleri
+- Canli tema: `Window:SetTheme("Midnight")`, `Window:SetAccent(Color3)`, `Window:ResetAccent()`
+- Mobil ac/kapat butonu (`MobileButton = true/false`, `Window:SetMobileButton(v)`)
+- Sol ustte arama kutusu, `Tooltip = "..."` secenegi (her bilesende)
+- Lucide ikonlar: `Window:Tab({ Icon = "house" })`, `Button({ Icon = "bell" })`
+- Pencere sag alt kosesinden yeniden boyutlandirilir; `Window:TabSection("Baslik")`
+- Hazir ayarlar sekmesi: `Window:AddSettingsTab()`
+- Config: `SaveConfig/LoadConfig/ListConfigs`, `Window:EnableAutoSave("default")` (arayuz kurulduktan sonra)
+- Yeni bilesenler: `Divider`, `Image`, `TextArea`, `RangeSlider`, `Toggle` icin `Keybind = Enum.KeyCode.X`
+- Callback hatalari menuyu bozmaz, bildirim olarak gosterilir; `Window:Destroy()` tum baglantilari temizler
