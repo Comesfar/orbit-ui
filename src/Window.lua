@@ -79,11 +79,21 @@ return function(Orbit, opts)
     local blur
     if opts.Blur then blur = New("BlurEffect", { Size = 0, Parent = Lighting }) end
 
+    local holder = New("Frame", {
+        Name = "WindowHolder", Parent = gui, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(curW, curH), BackgroundTransparency = 1,
+    })
+    local shadow = New("ImageLabel", {
+        Name = "DropShadow", Parent = holder, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, 36, 1, 36), BackgroundTransparency = 1, Image = "rbxassetid://6014261993",
+        ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 1,
+        ScaleType = Enum.ScaleType.Slice, SliceCenter = Rect.new(49, 49, 450, 450), ZIndex = 0,
+    })
     local main = New("CanvasGroup", {
-        Name = "Main", Parent = gui, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(curW, curH), BackgroundColor3 = theme.Background, GroupTransparency = 1,
+        Name = "Main", Parent = holder, Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = theme.Background, GroupTransparency = 1, ZIndex = 1,
     }, { Corner(12), Stroke(theme.Stroke) })
-    local scale = New("UIScale", { Parent = main, Scale = 0.92 })
+    local scale = New("UIScale", { Parent = holder, Scale = 0.92 })
 
     -- Kucuk ekranlara otomatik sigdir
     local fitScale = 1
@@ -109,7 +119,7 @@ return function(Orbit, opts)
         end
     end
     renderTitle()
-    Util.MakeDraggable(top, main, connect)
+    Util.MakeDraggable(top, holder, connect)
 
     local function topButton(text, xOff, hoverColor)
         local b = New("TextButton", { Parent = top, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, xOff, 0.5, 0), Size = UDim2.fromOffset(28, 28), BackgroundColor3 = theme.Element, AutoButtonColor = false, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = theme.SubText, Text = text }, { Corner(7) })
@@ -130,7 +140,9 @@ return function(Orbit, opts)
             sidebar.CanvasSize = UDim2.fromOffset(0, sidebarLayout.AbsoluteContentSize.Y + 20)
         end)
     end
-    local searchBox = New("TextBox", { Name = "Search", Parent = sidebar, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = theme.Element, ClearTextOnFocus = false, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = theme.Text, PlaceholderText = "Ara...", PlaceholderColor3 = theme.SubText, Text = "", TextXAlignment = Enum.TextXAlignment.Left }, { Corner(7), Stroke(theme.Stroke), Pad(10, 0, 8, 0) })
+    local searchBox = New("TextBox", { Name = "Search", Parent = sidebar, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = theme.Element, ClearTextOnFocus = false, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = theme.Text, PlaceholderText = "Ara...", PlaceholderColor3 = theme.SubText, Text = "", TextXAlignment = Enum.TextXAlignment.Left }, { Corner(7), Stroke(theme.Stroke), Pad(10, 0, 24, 0) })
+    local clearBtn = New("TextButton", { Name = "Clear", Parent = searchBox, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 18, 0.5, 0), Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = theme.SubText, Text = "X", Visible = false })
+    clearBtn.Activated:Connect(function() searchBox.Text = "" end)
 
     local content = New("Frame", { Name = "Content", Parent = main, Position = UDim2.fromOffset(158, 44), Size = UDim2.new(1, -158, 1, -44), BackgroundTransparency = 1, ClipsDescendants = true })
 
@@ -143,6 +155,7 @@ return function(Orbit, opts)
     -- Arama: Row/Paragraph'lar OrbitSearch attribute'u tasir
     local function applySearch()
         local q = searchBox.Text:lower()
+        clearBtn.Visible = (q ~= "")
         local counts = {}
         for _, tab in ipairs(env.TabList) do
             local n = 0
@@ -180,16 +193,24 @@ return function(Orbit, opts)
     function Window:SetVisible(v)
         Window.Visible = v
         if v then
+            holder.Visible = true
             main.Visible = true
             fit()
             Tween(main, 0.25, { GroupTransparency = 0 })
+            Tween(shadow, 0.25, { ImageTransparency = 0.45 })
             Tween(scale, 0.3, { Scale = fitScale }, Enum.EasingStyle.Back)
             if blur then Tween(blur, 0.3, { Size = 12 }) end
         else
             Tween(main, 0.2, { GroupTransparency = 1 })
+            Tween(shadow, 0.2, { ImageTransparency = 1 })
             Tween(scale, 0.2, { Scale = 0.92 })
             if blur then Tween(blur, 0.2, { Size = 0 }) end
-            task.delay(0.2, function() if not Window.Visible then main.Visible = false end end)
+            task.delay(0.2, function()
+                if not Window.Visible then
+                    main.Visible = false
+                    holder.Visible = false
+                end
+            end)
         end
     end
     function Window:Toggle() Window:SetVisible(not Window.Visible) end
@@ -235,13 +256,13 @@ return function(Orbit, opts)
     end
     local rs
     Util.Drag(grip, function(pos, isStart)
-        if isStart then rs = { pos = pos, w = curW, h = curH, p = main.Position } return end
+        if isStart then rs = { pos = pos, w = curW, h = curH, p = holder.Position } return end
         local s = math.max(scale.Scale, 0.1)
         local w = math.clamp(rs.w + (pos.X - rs.pos.X) / s, opts.MinWidth or 460, opts.MaxWidth or 1000)
         local h = math.clamp(rs.h + (pos.Y - rs.pos.Y) / s, opts.MinHeight or 320, opts.MaxHeight or 800)
         curW, curH = w, h
-        main.Size = UDim2.fromOffset(w, h)
-        main.Position = UDim2.new(rs.p.X.Scale, rs.p.X.Offset + (w - rs.w) * s / 2, rs.p.Y.Scale, rs.p.Y.Offset + (h - rs.h) * s / 2)
+        holder.Size = UDim2.fromOffset(w, h)
+        holder.Position = UDim2.new(rs.p.X.Scale, rs.p.X.Offset + (w - rs.w) * s / 2, rs.p.Y.Scale, rs.p.Y.Offset + (h - rs.h) * s / 2)
     end, connect)
 
     ---------------------------------------------------------------- canli tema

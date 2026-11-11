@@ -1,11 +1,15 @@
 local import = ...
 local Util = import("Util")
-local New, Tween, Corner, Pad = Util.New, Util.Tween, Util.Corner, Util.Pad
+local New, Tween, Corner, Stroke, Pad = Util.New, Util.Tween, Util.Corner, Util.Stroke, Util.Pad
 
+local UserInputService = Util.Service("UserInputService")
+
+-- Dropdown: disari basinca kapanir, Searchable = true (veya >8 secenekte otomatik) ile icinde arama yapilir
 return function(ctx, o)
     local theme, Window = ctx.Theme, ctx.Window
     local values = o.Values or {}
     local multi = o.Multi or false
+    local searchable = o.Searchable ~= nil and o.Searchable or (#values > 8)
     local selected
     if multi then
         selected = {}
@@ -15,11 +19,34 @@ return function(ctx, o)
     end
 
     local HEADER = 38
+    local SEARCH_H = searchable and 30 or 0
     local row = ctx.Row(HEADER, o.Title)
     local hbtn = ctx.Hoverable(row, HEADER)
     local valLabel = New("TextLabel", { Parent = row, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -30, 0, 0), Size = UDim2.new(0.5, -30, 0, HEADER), Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = theme.SubText, Text = "", TextTruncate = Enum.TextTruncate.AtEnd })
     local arrow = New("TextLabel", { Parent = row, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 0), Size = UDim2.fromOffset(20, HEADER), Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = theme.SubText, Text = "v" })
-    local list = New("ScrollingFrame", { Parent = row, Position = UDim2.fromOffset(8, HEADER), Size = UDim2.new(1, -16, 1, -HEADER - 8), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, { New("UIListLayout", { Padding = UDim.new(0, 2) }) })
+
+    local filterBox
+    if searchable then
+        filterBox = New("TextBox", {
+            Parent = row, Position = UDim2.fromOffset(8, HEADER + 2), Size = UDim2.new(1, -16, 0, 24),
+            BackgroundColor3 = theme.Background, ClearTextOnFocus = false, Font = Enum.Font.Gotham,
+            TextSize = 11, TextColor3 = theme.Text, PlaceholderText = "Filtrele...", PlaceholderColor3 = theme.SubText,
+            Text = "", TextXAlignment = Enum.TextXAlignment.Left,
+        }, { Corner(6), Stroke(theme.Stroke), Pad(8, 0, 8, 0) })
+    end
+
+    local list = New("ScrollingFrame", {
+        Parent = row, Position = UDim2.fromOffset(8, HEADER + SEARCH_H),
+        Size = UDim2.new(1, -16, 1, -HEADER - SEARCH_H - 8), BackgroundTransparency = 1,
+        BorderSizePixel = 0, ScrollBarThickness = 2, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(),
+    }, { New("UIListLayout", { Padding = UDim.new(0, 2) }) })
+
+    local listLayout = list:FindFirstChildOfClass("UIListLayout")
+    if listLayout then
+        listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            list.CanvasSize = UDim2.fromOffset(0, listLayout.AbsoluteContentSize.Y + 4)
+        end)
+    end
 
     local open = false
     local obj = {}
@@ -41,22 +68,48 @@ return function(ctx, o)
     end
     local function refresh()
         valLabel.Text = text()
+        local q = filterBox and filterBox.Text:lower() or ""
         for v, b in pairs(buttons) do
             local on = multi and selected[v] or selected == v
+            b.Visible = (q == "") or (tostring(v):lower():find(q, 1, true) ~= nil)
             Tween(b, 0.12, { BackgroundTransparency = on and 0 or 1, TextColor3 = on and Color3.new(1, 1, 1) or theme.SubText })
         end
     end
-    local function listHeight() return math.min(#values, 5) * 28 + 8 end
+    if filterBox then
+        filterBox:GetPropertyChangedSignal("Text"):Connect(refresh)
+    end
+
+    local function listHeight() return math.min(#values, 5) * 28 + 8 + SEARCH_H end
     function obj:Open()
         open = true
+        if Window._openDropdown and Window._openDropdown ~= obj then
+            Window._openDropdown:Close()
+        end
+        Window._openDropdown = obj
         Tween(row, 0.2, { Size = UDim2.new(1, 0, 0, HEADER + listHeight()) })
         Tween(arrow, 0.2, { Rotation = 180 })
     end
     function obj:Close()
+        if not open then return end
         open = false
+        if Window._openDropdown == obj then Window._openDropdown = nil end
+        if filterBox then filterBox.Text = "" end
         Tween(row, 0.2, { Size = UDim2.new(1, 0, 0, HEADER) })
         Tween(arrow, 0.2, { Rotation = 0 })
     end
+
+    -- Disariya tiklaninca kapat
+    ctx.Connect(UserInputService.InputBegan, function(i)
+        if not open then return end
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            local p = i.Position
+            local rp, rs = row.AbsolutePosition, row.AbsoluteSize
+            if p.X < rp.X or p.X > rp.X + rs.X or p.Y < rp.Y or p.Y > rp.Y + rs.Y then
+                obj:Close()
+            end
+        end
+    end)
+
     local function build()
         for _, b in pairs(buttons) do b:Destroy() end
         buttons = {}

@@ -1,11 +1,16 @@
 -- Orbit UI :: Util - ortak yardimcilar
 local import = ...
 
-local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
+local cloneref = (cloneref or clonereference or function(i) return i end)
+local function Service(name)
+    return cloneref(game:GetService(name))
+end
 
-local Util = {}
+local Players = Service("Players")
+local TweenService = Service("TweenService")
+local UserInputService = Service("UserInputService")
+
+local Util = { Service = Service }
 
 function Util.New(class, props, children)
     local inst = Instance.new(class)
@@ -38,10 +43,29 @@ function Util.Pad(l, t, r, b)
     return Util.New("UIPadding", { PaddingLeft = UDim.new(0, l), PaddingTop = UDim.new(0, t), PaddingRight = UDim.new(0, r), PaddingBottom = UDim.new(0, b) })
 end
 
+-- Buton tiklamalarinda hafif dalga (ripple) efekti
+function Util.Ripple(parent, color)
+    task.spawn(function()
+        local m = UserInputService:GetMouseLocation()
+        local relX = m.X - parent.AbsolutePosition.X
+        local relY = m.Y - parent.AbsolutePosition.Y - 36
+        local maxD = math.max(parent.AbsoluteSize.X, parent.AbsoluteSize.Y) * 1.6
+        local circle = Util.New("Frame", {
+            Parent = parent, AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromOffset(relX, relY), Size = UDim2.fromOffset(0, 0),
+            BackgroundColor3 = color or Color3.new(1, 1, 1), BackgroundTransparency = 0.75,
+            BorderSizePixel = 0, ZIndex = parent.ZIndex + 1,
+        }, { Util.Corner(999) })
+        Util.Tween(circle, 0.4, { Size = UDim2.fromOffset(maxD, maxD), BackgroundTransparency = 1 })
+        task.wait(0.42)
+        if circle and circle.Parent then circle:Destroy() end
+    end)
+end
+
 function Util.GetGuiParent()
     local ok, hui = pcall(function() return gethui and gethui() end)
     if ok and hui then return hui end
-    ok, hui = pcall(function() return game:GetService("CoreGui") end)
+    ok, hui = pcall(function() return Service("CoreGui") end)
     if ok and hui then
         local test = Instance.new("Folder")
         if pcall(function() test.Parent = hui end) then test:Destroy() return hui end
@@ -71,7 +95,6 @@ function Util.MakeDraggable(handle, target, connect)
 end
 
 -- Surukleme sirasinda input takibi (slider, color picker)
--- callback(pos, isStart)
 function Util.Drag(frame, callback, connect)
     connect = connect or defaultConnect
     local active = false

@@ -129,6 +129,7 @@ return function(ctx, b)
         New("TextLabel", { Parent = row, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(20, 20), Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = theme.Accent, Text = ">" })
     end
     btn.Activated:Connect(function()
+        Util.Ripple(row, theme.Accent)
         Tween(row, 0.08, { BackgroundColor3 = theme.Accent }).Completed:Connect(function() Tween(row, 0.2, { BackgroundColor3 = theme.Element }) end)
         if b.Callback then ctx.Call(b.Callback) end
     end)
@@ -214,12 +215,16 @@ end
 __modules["Elements.Dropdown"] = function(...)
 local import = ...
 local Util = import("Util")
-local New, Tween, Corner, Pad = Util.New, Util.Tween, Util.Corner, Util.Pad
+local New, Tween, Corner, Stroke, Pad = Util.New, Util.Tween, Util.Corner, Util.Stroke, Util.Pad
 
+local UserInputService = Util.Service("UserInputService")
+
+-- Dropdown: disari basinca kapanir, Searchable = true (veya >8 secenekte otomatik) ile icinde arama yapilir
 return function(ctx, o)
     local theme, Window = ctx.Theme, ctx.Window
     local values = o.Values or {}
     local multi = o.Multi or false
+    local searchable = o.Searchable ~= nil and o.Searchable or (#values > 8)
     local selected
     if multi then
         selected = {}
@@ -229,11 +234,34 @@ return function(ctx, o)
     end
 
     local HEADER = 38
+    local SEARCH_H = searchable and 30 or 0
     local row = ctx.Row(HEADER, o.Title)
     local hbtn = ctx.Hoverable(row, HEADER)
     local valLabel = New("TextLabel", { Parent = row, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -30, 0, 0), Size = UDim2.new(0.5, -30, 0, HEADER), Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = theme.SubText, Text = "", TextTruncate = Enum.TextTruncate.AtEnd })
     local arrow = New("TextLabel", { Parent = row, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 0), Size = UDim2.fromOffset(20, HEADER), Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = theme.SubText, Text = "v" })
-    local list = New("ScrollingFrame", { Parent = row, Position = UDim2.fromOffset(8, HEADER), Size = UDim2.new(1, -16, 1, -HEADER - 8), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, { New("UIListLayout", { Padding = UDim.new(0, 2) }) })
+
+    local filterBox
+    if searchable then
+        filterBox = New("TextBox", {
+            Parent = row, Position = UDim2.fromOffset(8, HEADER + 2), Size = UDim2.new(1, -16, 0, 24),
+            BackgroundColor3 = theme.Background, ClearTextOnFocus = false, Font = Enum.Font.Gotham,
+            TextSize = 11, TextColor3 = theme.Text, PlaceholderText = "Filtrele...", PlaceholderColor3 = theme.SubText,
+            Text = "", TextXAlignment = Enum.TextXAlignment.Left,
+        }, { Corner(6), Stroke(theme.Stroke), Pad(8, 0, 8, 0) })
+    end
+
+    local list = New("ScrollingFrame", {
+        Parent = row, Position = UDim2.fromOffset(8, HEADER + SEARCH_H),
+        Size = UDim2.new(1, -16, 1, -HEADER - SEARCH_H - 8), BackgroundTransparency = 1,
+        BorderSizePixel = 0, ScrollBarThickness = 2, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(),
+    }, { New("UIListLayout", { Padding = UDim.new(0, 2) }) })
+
+    local listLayout = list:FindFirstChildOfClass("UIListLayout")
+    if listLayout then
+        listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            list.CanvasSize = UDim2.fromOffset(0, listLayout.AbsoluteContentSize.Y + 4)
+        end)
+    end
 
     local open = false
     local obj = {}
@@ -255,22 +283,48 @@ return function(ctx, o)
     end
     local function refresh()
         valLabel.Text = text()
+        local q = filterBox and filterBox.Text:lower() or ""
         for v, b in pairs(buttons) do
             local on = multi and selected[v] or selected == v
+            b.Visible = (q == "") or (tostring(v):lower():find(q, 1, true) ~= nil)
             Tween(b, 0.12, { BackgroundTransparency = on and 0 or 1, TextColor3 = on and Color3.new(1, 1, 1) or theme.SubText })
         end
     end
-    local function listHeight() return math.min(#values, 5) * 28 + 8 end
+    if filterBox then
+        filterBox:GetPropertyChangedSignal("Text"):Connect(refresh)
+    end
+
+    local function listHeight() return math.min(#values, 5) * 28 + 8 + SEARCH_H end
     function obj:Open()
         open = true
+        if Window._openDropdown and Window._openDropdown ~= obj then
+            Window._openDropdown:Close()
+        end
+        Window._openDropdown = obj
         Tween(row, 0.2, { Size = UDim2.new(1, 0, 0, HEADER + listHeight()) })
         Tween(arrow, 0.2, { Rotation = 180 })
     end
     function obj:Close()
+        if not open then return end
         open = false
+        if Window._openDropdown == obj then Window._openDropdown = nil end
+        if filterBox then filterBox.Text = "" end
         Tween(row, 0.2, { Size = UDim2.new(1, 0, 0, HEADER) })
         Tween(arrow, 0.2, { Rotation = 0 })
     end
+
+    -- Disariya tiklaninca kapat
+    ctx.Connect(UserInputService.InputBegan, function(i)
+        if not open then return end
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            local p = i.Position
+            local rp, rs = row.AbsolutePosition, row.AbsoluteSize
+            if p.X < rp.X or p.X > rp.X + rs.X or p.Y < rp.Y or p.Y > rp.Y + rs.Y then
+                obj:Close()
+            end
+        end
+    end)
+
     local function build()
         for _, b in pairs(buttons) do b:Destroy() end
         buttons = {}
@@ -707,23 +761,33 @@ end
 __modules["Elements.Slider"] = function(...)
 local import = ...
 local Util = import("Util")
-local New, Corner = Util.New, Util.Corner
+local New, Tween, Corner = Util.New, Util.Tween, Util.Corner
 
+-- Slider: sag ustteki degere tiklayarak klavyeyle dogrudan sayi da girilebilir
 return function(ctx, o)
     local theme, Window = ctx.Theme, ctx.Window
     local min, max, step = o.Min or 0, o.Max or 100, o.Step or 1
     local value = math.clamp(o.Default or min, min, max)
     local row, label = ctx.Row(52, o.Title)
     label.Size = UDim2.new(1, -90, 0, 30)
-    local valLabel = New("TextLabel", { Parent = row, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 0), Size = UDim2.fromOffset(70, 30), Font = Enum.Font.GothamMedium, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = theme.SubText, Text = "" })
+
+    local valBox = New("TextBox", {
+        Parent = row, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -12, 0, 4), Size = UDim2.fromOffset(74, 22),
+        Font = Enum.Font.GothamMedium, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right,
+        TextColor3 = theme.SubText, ClearTextOnFocus = false, Text = "", ZIndex = 3,
+    }, { Corner(4) })
+
     local track = New("Frame", { Parent = row, Position = UDim2.new(0, 12, 0, 34), Size = UDim2.new(1, -24, 0, 6), BackgroundColor3 = theme.Stroke }, { Corner(3) })
     local fill = New("Frame", { Parent = track, Size = UDim2.fromScale(0, 1), BackgroundColor3 = theme.Accent }, { Corner(3) })
     New("Frame", { Parent = fill, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(1, 0.5), Size = UDim2.fromOffset(12, 12), BackgroundColor3 = Color3.new(1, 1, 1) }, { Corner(6) })
+
     local obj = {}
     local function render()
         fill.Size = UDim2.fromScale((value - min) / (max - min), 1)
-        valLabel.Text = tostring(value) .. (o.Suffix or "")
+        valBox.Text = tostring(value) .. (o.Suffix or "")
     end
+
     function obj:Set(v, silent)
         v = math.clamp(Util.round(v, step), min, max)
         v = tonumber(string.format("%.6g", v))
@@ -734,10 +798,22 @@ return function(ctx, o)
         if not silent and o.Callback then ctx.Call(o.Callback, value) end
     end
     function obj:Get() return value end
+
+    valBox.Focused:Connect(function()
+        valBox.Text = tostring(value)
+        Tween(valBox, 0.12, { TextColor3 = theme.Accent })
+    end)
+    valBox.FocusLost:Connect(function()
+        Tween(valBox, 0.12, { TextColor3 = theme.SubText })
+        local num = tonumber(valBox.Text:match("[-%d%.]+"))
+        if num then obj:Set(num) else render() end
+    end)
+
     Util.Drag(track, function(pos)
         local a = math.clamp((pos.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
         obj:Set(min + (max - min) * a)
     end, ctx.Connect)
+
     render()
     ctx.Register(o.Flag, value, function(v) obj:Set(v) end)
     return obj
@@ -983,9 +1059,19 @@ __modules["init"] = function(...)
 -- Orbit UI :: giris noktasi
 local import = ...
 
-local Orbit = { Version = "0.3.0", Windows = {} }
+local Orbit = { Version = "0.3.1-beta", Windows = {} }
 
 Orbit.Themes = import("Themes")
+
+-- Ozel tema olusturma: Orbit:CreateTheme("Cyberpunk", { Background = ..., Accent = ... })
+function Orbit:CreateTheme(name, palette)
+    assert(type(name) == "string" and type(palette) == "table", "[Orbit] CreateTheme: gecersiz parametre")
+    local base = Orbit.Themes.Dark
+    local merged = {}
+    for k, v in pairs(base) do merged[k] = palette[k] or v end
+    Orbit.Themes[name] = merged
+    return merged
+end
 
 -- Bildirimler: Orbit:Notify(...)
 import("Notify")(Orbit)
@@ -1748,11 +1834,16 @@ __modules["Util"] = function(...)
 -- Orbit UI :: Util - ortak yardimcilar
 local import = ...
 
-local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
+local cloneref = (cloneref or clonereference or function(i) return i end)
+local function Service(name)
+    return cloneref(game:GetService(name))
+end
 
-local Util = {}
+local Players = Service("Players")
+local TweenService = Service("TweenService")
+local UserInputService = Service("UserInputService")
+
+local Util = { Service = Service }
 
 function Util.New(class, props, children)
     local inst = Instance.new(class)
@@ -1785,10 +1876,29 @@ function Util.Pad(l, t, r, b)
     return Util.New("UIPadding", { PaddingLeft = UDim.new(0, l), PaddingTop = UDim.new(0, t), PaddingRight = UDim.new(0, r), PaddingBottom = UDim.new(0, b) })
 end
 
+-- Buton tiklamalarinda hafif dalga (ripple) efekti
+function Util.Ripple(parent, color)
+    task.spawn(function()
+        local m = UserInputService:GetMouseLocation()
+        local relX = m.X - parent.AbsolutePosition.X
+        local relY = m.Y - parent.AbsolutePosition.Y - 36
+        local maxD = math.max(parent.AbsoluteSize.X, parent.AbsoluteSize.Y) * 1.6
+        local circle = Util.New("Frame", {
+            Parent = parent, AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromOffset(relX, relY), Size = UDim2.fromOffset(0, 0),
+            BackgroundColor3 = color or Color3.new(1, 1, 1), BackgroundTransparency = 0.75,
+            BorderSizePixel = 0, ZIndex = parent.ZIndex + 1,
+        }, { Util.Corner(999) })
+        Util.Tween(circle, 0.4, { Size = UDim2.fromOffset(maxD, maxD), BackgroundTransparency = 1 })
+        task.wait(0.42)
+        if circle and circle.Parent then circle:Destroy() end
+    end)
+end
+
 function Util.GetGuiParent()
     local ok, hui = pcall(function() return gethui and gethui() end)
     if ok and hui then return hui end
-    ok, hui = pcall(function() return game:GetService("CoreGui") end)
+    ok, hui = pcall(function() return Service("CoreGui") end)
     if ok and hui then
         local test = Instance.new("Folder")
         if pcall(function() test.Parent = hui end) then test:Destroy() return hui end
@@ -1818,7 +1928,6 @@ function Util.MakeDraggable(handle, target, connect)
 end
 
 -- Surukleme sirasinda input takibi (slider, color picker)
--- callback(pos, isStart)
 function Util.Drag(frame, callback, connect)
     connect = connect or defaultConnect
     local active = false
@@ -2060,11 +2169,21 @@ return function(Orbit, opts)
     local blur
     if opts.Blur then blur = New("BlurEffect", { Size = 0, Parent = Lighting }) end
 
+    local holder = New("Frame", {
+        Name = "WindowHolder", Parent = gui, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(curW, curH), BackgroundTransparency = 1,
+    })
+    local shadow = New("ImageLabel", {
+        Name = "DropShadow", Parent = holder, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, 36, 1, 36), BackgroundTransparency = 1, Image = "rbxassetid://6014261993",
+        ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 1,
+        ScaleType = Enum.ScaleType.Slice, SliceCenter = Rect.new(49, 49, 450, 450), ZIndex = 0,
+    })
     local main = New("CanvasGroup", {
-        Name = "Main", Parent = gui, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(curW, curH), BackgroundColor3 = theme.Background, GroupTransparency = 1,
+        Name = "Main", Parent = holder, Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = theme.Background, GroupTransparency = 1, ZIndex = 1,
     }, { Corner(12), Stroke(theme.Stroke) })
-    local scale = New("UIScale", { Parent = main, Scale = 0.92 })
+    local scale = New("UIScale", { Parent = holder, Scale = 0.92 })
 
     -- Kucuk ekranlara otomatik sigdir
     local fitScale = 1
@@ -2090,7 +2209,7 @@ return function(Orbit, opts)
         end
     end
     renderTitle()
-    Util.MakeDraggable(top, main, connect)
+    Util.MakeDraggable(top, holder, connect)
 
     local function topButton(text, xOff, hoverColor)
         local b = New("TextButton", { Parent = top, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, xOff, 0.5, 0), Size = UDim2.fromOffset(28, 28), BackgroundColor3 = theme.Element, AutoButtonColor = false, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = theme.SubText, Text = text }, { Corner(7) })
@@ -2111,7 +2230,9 @@ return function(Orbit, opts)
             sidebar.CanvasSize = UDim2.fromOffset(0, sidebarLayout.AbsoluteContentSize.Y + 20)
         end)
     end
-    local searchBox = New("TextBox", { Name = "Search", Parent = sidebar, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = theme.Element, ClearTextOnFocus = false, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = theme.Text, PlaceholderText = "Ara...", PlaceholderColor3 = theme.SubText, Text = "", TextXAlignment = Enum.TextXAlignment.Left }, { Corner(7), Stroke(theme.Stroke), Pad(10, 0, 8, 0) })
+    local searchBox = New("TextBox", { Name = "Search", Parent = sidebar, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = theme.Element, ClearTextOnFocus = false, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = theme.Text, PlaceholderText = "Ara...", PlaceholderColor3 = theme.SubText, Text = "", TextXAlignment = Enum.TextXAlignment.Left }, { Corner(7), Stroke(theme.Stroke), Pad(10, 0, 24, 0) })
+    local clearBtn = New("TextButton", { Name = "Clear", Parent = searchBox, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 18, 0.5, 0), Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = theme.SubText, Text = "X", Visible = false })
+    clearBtn.Activated:Connect(function() searchBox.Text = "" end)
 
     local content = New("Frame", { Name = "Content", Parent = main, Position = UDim2.fromOffset(158, 44), Size = UDim2.new(1, -158, 1, -44), BackgroundTransparency = 1, ClipsDescendants = true })
 
@@ -2124,6 +2245,7 @@ return function(Orbit, opts)
     -- Arama: Row/Paragraph'lar OrbitSearch attribute'u tasir
     local function applySearch()
         local q = searchBox.Text:lower()
+        clearBtn.Visible = (q ~= "")
         local counts = {}
         for _, tab in ipairs(env.TabList) do
             local n = 0
@@ -2161,16 +2283,24 @@ return function(Orbit, opts)
     function Window:SetVisible(v)
         Window.Visible = v
         if v then
+            holder.Visible = true
             main.Visible = true
             fit()
             Tween(main, 0.25, { GroupTransparency = 0 })
+            Tween(shadow, 0.25, { ImageTransparency = 0.45 })
             Tween(scale, 0.3, { Scale = fitScale }, Enum.EasingStyle.Back)
             if blur then Tween(blur, 0.3, { Size = 12 }) end
         else
             Tween(main, 0.2, { GroupTransparency = 1 })
+            Tween(shadow, 0.2, { ImageTransparency = 1 })
             Tween(scale, 0.2, { Scale = 0.92 })
             if blur then Tween(blur, 0.2, { Size = 0 }) end
-            task.delay(0.2, function() if not Window.Visible then main.Visible = false end end)
+            task.delay(0.2, function()
+                if not Window.Visible then
+                    main.Visible = false
+                    holder.Visible = false
+                end
+            end)
         end
     end
     function Window:Toggle() Window:SetVisible(not Window.Visible) end
@@ -2216,13 +2346,13 @@ return function(Orbit, opts)
     end
     local rs
     Util.Drag(grip, function(pos, isStart)
-        if isStart then rs = { pos = pos, w = curW, h = curH, p = main.Position } return end
+        if isStart then rs = { pos = pos, w = curW, h = curH, p = holder.Position } return end
         local s = math.max(scale.Scale, 0.1)
         local w = math.clamp(rs.w + (pos.X - rs.pos.X) / s, opts.MinWidth or 460, opts.MaxWidth or 1000)
         local h = math.clamp(rs.h + (pos.Y - rs.pos.Y) / s, opts.MinHeight or 320, opts.MaxHeight or 800)
         curW, curH = w, h
-        main.Size = UDim2.fromOffset(w, h)
-        main.Position = UDim2.new(rs.p.X.Scale, rs.p.X.Offset + (w - rs.w) * s / 2, rs.p.Y.Scale, rs.p.Y.Offset + (h - rs.h) * s / 2)
+        holder.Size = UDim2.fromOffset(w, h)
+        holder.Position = UDim2.new(rs.p.X.Scale, rs.p.X.Offset + (w - rs.w) * s / 2, rs.p.Y.Scale, rs.p.Y.Offset + (h - rs.h) * s / 2)
     end, connect)
 
     ---------------------------------------------------------------- canli tema
